@@ -1,13 +1,21 @@
-# SynapNote-AI-
+<img width="157" height="153" alt="image" src="https://github.com/user-attachments/assets/730e6464-d8e8-4cec-8bfa-a512436a3f03" /># SynapNote-AI-
 Trợ lý ghi chép & trích xuất nội dung cuộc họp thông minh
 
 Gitflow: 
+```
 main
  │
 develop
- ├── feature/*
+ ├── feature/
  └── bugfix/*
  └── release/*
+	```
+```
+main
+ ├─ feature/homepage
+ ├─ feature/product-page
+ ├─ feature/cart
+```
 trong đó: 
 - main là nhánh chứa code sạch, code production không được commit trực tiếp. Chỉ nhánh release mới được merge vào main
 - develop là nhánh tách ra từ main chứa code chung của team, là nhánh dành cho team phát triển code được update code mới nhất. code chạy ổn định có thể merge vào release.
