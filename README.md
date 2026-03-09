@@ -1,6 +1,8 @@
 # SynapNote-AI-
 Trợ lý ghi chép & trích xuất nội dung cuộc họp thông minh
 
+https://chatgpt.com/share/69ae8402-9e20-800b-8299-e16c896c91b8
+
 # Gitflow: 
 ```
 main
