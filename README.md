@@ -15,7 +15,7 @@ develop
 
 trong đó: 
 - main là nhánh chứa code sạch, code production không được commit trực tiếp. Chỉ nhánh release mới được merge vào main
-- develop là nhánh tách ra từ main chứa code chung của team, là nhánh dành cho team phát triển code được update code mới nhất. code chạy ổn định có thể merge vào release.
+- develop là nhánh tách ra từ main chứa code chung của team, là nhánh dành cho team phát triển code được update code mới nhất. code chạy ổn định có thể merge vào rel   ease.
 - feature là nhánh tách ra từ dev để phát triển tính năng, mỗi người làm một feature riêng, code ổn thì merge vào dev.
 - release là nhánh tách ra từ dev và là nhánh duy nhất được merge vào main.
 
