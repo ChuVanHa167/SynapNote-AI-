@@ -6,7 +6,7 @@ interface AIIntelligencePanelProps {
   summary: string;
   decisions: string[];
   actionItems: ActionItem[];
-  onToggleTask: (id: number) => void;
+  onToggleTask: (id: string) => void;
 }
 
 export function AIIntelligencePanel({ summary, decisions, actionItems, onToggleTask }: AIIntelligencePanelProps) {

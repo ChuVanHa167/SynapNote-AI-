@@ -1,13 +1,56 @@
 "use client";
 
-import { useState } from 'react';
-import { Search, Filter, Clock, MoreHorizontal, FileVideo, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, Clock, MoreHorizontal, FileVideo, Plus, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-import { mockMeetingsList } from '@/lib/mockData';
+interface Meeting {
+  id: string;
+  title: string;
+  date: string;
+  duration: string;
+  participants: number;
+  status: string;
+}
 
 export default function MeetingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/meetings");
+        if (response.ok) {
+          const data = await response.json();
+          setMeetings(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch meetings:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchMeetings();
+  }, []);
+
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'HOÀN THÀNH':
+        return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
+      case 'ĐANG XỬ LÝ':
+        return "text-amber-500 bg-amber-500/10 border-amber-500/20";
+      case 'LỖI':
+        return "text-red-500 bg-red-500/10 border-red-500/20";
+      default:
+        return "text-foreground/40 bg-card/10 border-border/20";
+    }
+  };
+
+  const filteredMeetings = meetings.filter(m => 
+    m.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:p-10 hide-scrollbar flex flex-col gap-8 h-full">
@@ -44,51 +87,62 @@ export default function MeetingsPage() {
 
       {/* Meetings List */}
       <div className="glass-panel rounded-[2rem] border border-border overflow-hidden flex-1 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-both">
-         <div className="overflow-x-auto h-full">
-            <table className="w-full text-sm text-left">
-               <thead className="text-[10px] uppercase tracking-widest text-foreground/80 bg-card/20 border-b border-border sticky top-0 z-10">
-                  <tr>
-                     <th className="px-8 py-5 font-medium">Tên cuộc họp</th>
-                     <th className="px-8 py-5 font-medium">Thời gian</th>
-                     <th className="px-8 py-5 font-medium">Thời lượng</th>
-                     <th className="px-8 py-5 font-medium text-center">Người tham gia</th>
-                     <th className="px-8 py-5 font-medium text-right">Trạng thái</th>
-                     <th className="px-8 py-5 text-right"></th>
-                  </tr>
-               </thead>
-               <tbody className="divide-y divide-border">
-                  {mockMeetingsList.map((item, i) => (
-                     <tr key={i} className="hover:bg-card/40 transition-colors group">
-                        <td className="px-8 py-5">
-                           <Link href={`/meetings/${item.id}`} className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-card border border-white/5 flex items-center justify-center text-foreground/90 group-hover:text-accent group-hover:border-accent/20 transition-all">
-                                 <FileVideo size={20} strokeWidth={1.5} />
-                              </div>
-                              <span className="font-medium text-foreground/90 group-hover:text-accent transition-colors">
-                                 {item.name}
-                              </span>
-                           </Link>
-                        </td>
-                        <td className="px-8 py-5 text-foreground/90">
-                           <div className="flex items-center gap-2">
-                              <Clock size={14} className="text-foreground/80" />
-                              {item.date}
-                           </div>
-                        </td>
-                        <td className="px-8 py-5 text-foreground/90 font-mono text-xs">{item.duration}</td>
-                        <td className="px-8 py-5 text-center text-foreground/90">{item.participants}</td>
-                        <td className="px-8 py-5 text-right">
-                           <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wider border ${item.statusColor}`}>
-                              {item.status}
-                           </span>
-                        </td>
-                        <td className="px-8 py-5 text-right text-foreground/30">
-                           <button className="hover:text-foreground transition-colors p-2"><MoreHorizontal size={16} /></button>
-                        </td>
+         <div className="overflow-x-auto h-full min-h-[400px]">
+            {isLoading ? (
+               <div className="w-full h-full flex items-center justify-center p-20">
+                  <Loader2 className="text-accent animate-spin" size={32} />
+               </div>
+            ) : filteredMeetings.length === 0 ? (
+               <div className="w-full h-full flex flex-col items-center justify-center p-20 opacity-40">
+                  <FileVideo size={48} strokeWidth={1} className="mb-4" />
+                  <p className="text-sm font-medium">Chưa có bản ghi nào được tìm thấy.</p>
+               </div>
+            ) : (
+               <table className="w-full text-sm text-left">
+                  <thead className="text-[10px] uppercase tracking-widest text-foreground/80 bg-card/20 border-b border-border sticky top-0 z-10">
+                     <tr>
+                        <th className="px-8 py-5 font-medium">Tên cuộc họp</th>
+                        <th className="px-8 py-5 font-medium">Thời gian</th>
+                        <th className="px-8 py-5 font-medium">Thời lượng</th>
+                        <th className="px-8 py-5 font-medium text-center">Người tham gia</th>
+                        <th className="px-8 py-5 font-medium text-right">Trạng thái</th>
+                        <th className="px-8 py-5 text-right"></th>
                      </tr>
-                  ))}
-               </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                     {filteredMeetings.map((item) => (
+                        <tr key={item.id} className="hover:bg-card/40 transition-colors group">
+                           <td className="px-8 py-5">
+                              <Link href={`/meetings/${item.id}`} className="flex items-center gap-4">
+                                 <div className="w-10 h-10 rounded-xl bg-card border border-white/5 flex items-center justify-center text-foreground/90 group-hover:text-accent group-hover:border-accent/20 transition-all">
+                                    <FileVideo size={20} strokeWidth={1.5} />
+                                 </div>
+                                 <span className="font-medium text-foreground/90 group-hover:text-accent transition-colors">
+                                    {item.title}
+                                 </span>
+                              </Link>
+                           </td>
+                           <td className="px-8 py-5 text-foreground/90">
+                              <div className="flex items-center gap-2">
+                                 <Clock size={14} className="text-foreground/80" />
+                                 {item.date}
+                              </div>
+                           </td>
+                           <td className="px-8 py-5 text-foreground/90 font-mono text-xs">{item.duration}</td>
+                           <td className="px-8 py-5 text-center text-foreground/90">{item.participants}</td>
+                           <td className="px-8 py-5 text-right">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wider border ${getStatusStyle(item.status)}`}>
+                                 {item.status}
+                              </span>
+                           </td>
+                           <td className="px-8 py-5 text-right text-foreground/30">
+                              <button className="hover:text-foreground transition-colors p-2"><MoreHorizontal size={16} /></button>
+                           </td>
+                        </tr>
+                     ))}
+                  </tbody>
+               </table>
+            )}
          </div>
       </div>
 

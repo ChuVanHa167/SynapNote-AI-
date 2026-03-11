@@ -10,7 +10,8 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate auth logic
+    // Simulate auth logic and store session cookie for middleware
+    document.cookie = "synap_session=fake_session_token_123; path=/; max-age=86400"; // 24 hours
     console.log("Submit", { email, password });
     window.location.href = '/'; 
   };
