@@ -1,5 +1,5 @@
 export interface TranscriptLine {
-    id: number;
+    id: string;
     time: string;
     seconds: number;
     speaker: string;
@@ -7,7 +7,7 @@ export interface TranscriptLine {
 }
 
 export interface ActionItem {
-    id: number;
+    id: string;
     task: string;
     assignee: string;
     deadline: string;
