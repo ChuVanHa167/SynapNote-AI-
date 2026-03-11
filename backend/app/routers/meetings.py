@@ -1,7 +1,7 @@
 import os
 import shutil
-from typing import List
-from fastapi import APIRouter, File, UploadFile, BackgroundTasks, Depends
+from typing import List, Optional
+from fastapi import APIRouter, File, UploadFile, BackgroundTasks, Depends, Form
 from sqlalchemy.orm import Session
 from app.models.schemas import Meeting
 from app.services.meeting_service import MeetingService
@@ -25,8 +25,8 @@ async def get_meeting(meeting_id: str, service: MeetingService = Depends(get_mee
 @router.post("/upload", response_model=Meeting)
 async def upload_audio(
     background_tasks: BackgroundTasks, 
-    title: str = None, 
     file: UploadFile = File(...),
+    title: Optional[str] = Form(None), 
     service: MeetingService = Depends(get_meeting_service)
 ):
     # 1. Start meeting in PENDING status

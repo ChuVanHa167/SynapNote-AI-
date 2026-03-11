@@ -10,6 +10,20 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [copied, setCopied] = useState(false);
 
+  // Profile Form States
+  const [displayName, setDisplayName] = useState("Alexander");
+  const [title, setTitle] = useState("Giám đốc Sản phẩm");
+  const [userEmail] = useState("admin@synapnote.com");
+
+  // Security Form States
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  // UI States
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'profile', label: 'Hồ sơ cá nhân', icon: User },
     { id: 'notifications', label: 'Thông báo', icon: Bell },
@@ -22,6 +36,47 @@ export default function SettingsPage() {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSave = async () => {
+    setMessage(null);
+    setLoading(true);
+    
+    try {
+      if (activeTab === 'profile') {
+        const res = await fetch(`http://localhost:8000/auth/profile?email=${userEmail}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display_name: displayName, title: title })
+        });
+        if (!res.ok) throw new Error("Lỗi khi cập nhật hồ sơ");
+        setMessage({ type: 'success', text: 'Cập nhật hồ sơ thành công!' });
+      } else if (activeTab === 'security') {
+        if (!currentPassword || !newPassword || !confirmPassword) {
+           throw new Error("Vui lòng điền đầy đủ thông tin");
+        }
+        if (newPassword !== confirmPassword) {
+           throw new Error("Mật khẩu xác nhận không khớp");
+        }
+        const res = await fetch(`http://localhost:8000/auth/password?email=${userEmail}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+        });
+        
+        if (!res.ok) {
+           const data = await res.json();
+           throw new Error(data.detail || "Lỗi khi cập nhật mật khẩu");
+        }
+        setMessage({ type: 'success', text: 'Cập nhật mật khẩu thành công!' });
+        setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+      }
+    } catch (err: any) {
+       setMessage({ type: 'error', text: err.message });
+    } finally {
+      setLoading(false);
+      setTimeout(() => setMessage(null), 3000);
+    }
   };
 
   return (
@@ -86,15 +141,15 @@ export default function SettingsPage() {
                         <div className="flex-1 space-y-5">
                            <div className="space-y-2">
                               <label className="text-xs font-semibold uppercase tracking-wider text-foreground/80">Tên hiển thị</label>
-                              <input type="text" defaultValue="Alexander" className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
+                              <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
                            </div>
                            <div className="space-y-2">
                               <label className="text-xs font-semibold uppercase tracking-wider text-foreground/80">Email</label>
-                              <input type="email" defaultValue="alexander@company.com" disabled className="w-full opacity-60 bg-background border border-border rounded-xl py-3 px-4 text-sm focus:outline-none shadow-inner" />
+                              <input type="email" value={userEmail} disabled className="w-full opacity-60 bg-background border border-border rounded-xl py-3 px-4 text-sm focus:outline-none shadow-inner" />
                            </div>
                            <div className="space-y-2">
                               <label className="text-xs font-semibold uppercase tracking-wider text-foreground/80">Chức danh</label>
-                              <input type="text" defaultValue="Giám đốc Sản phẩm" className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
+                              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
                            </div>
                         </div>
                      </div>
@@ -112,15 +167,15 @@ export default function SettingsPage() {
                      <div className="space-y-5">
                         <div className="space-y-2">
                            <label className="text-xs font-semibold uppercase tracking-wider text-foreground/80">Mật khẩu hiện tại</label>
-                           <input type="password" placeholder="••••••••" className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
+                           <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="••••••••" className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
                         </div>
                         <div className="space-y-2">
                            <label className="text-xs font-semibold uppercase tracking-wider text-foreground/80">Mật khẩu mới</label>
-                           <input type="password" placeholder="••••••••" className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
+                           <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
                         </div>
                         <div className="space-y-2">
                            <label className="text-xs font-semibold uppercase tracking-wider text-foreground/80">Xác nhận mật khẩu mới</label>
-                           <input type="password" placeholder="••••••••" className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
+                           <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-background border border-border focus:border-accent/50 rounded-xl py-3 px-4 text-sm focus:outline-none transition-all shadow-inner" />
                         </div>
                      </div>
                   </div>
@@ -183,19 +238,145 @@ export default function SettingsPage() {
                   </div>
                )}
 
-               {/* OTHER TABS */}
-               {(activeTab === 'notifications' || activeTab === 'billing') && (
-                  <div className="space-y-10 animate-in fade-in duration-500 flex flex-col items-center justify-center text-center py-20 opacity-50">
-                     <Sparkles size={40} className="text-accent mb-4" strokeWidth={1} />
-                     <h2 className="text-xl font-medium">Tính năng đang phát triển</h2>
-                     <p className="text-sm mt-2 max-w-sm">Phần này đang được đội ngũ của chúng tôi hoàn thiện và sẽ sớm ra mắt trong bản cập nhật kế tiếp.</p>
+               {/* 4. NOTIFICATIONS SETTINGS */}
+               {activeTab === 'notifications' && (
+                  <div className="space-y-10 animate-in fade-in duration-500">
+                     <div className="border-b border-border pb-6">
+                        <h2 className="text-xl font-medium text-foreground/90 mb-1">Cài đặt Thông báo</h2>
+                        <p className="text-sm text-foreground/80">Chọn cách thức và thời điểm bạn muốn nhận thông báo từ hệ thống.</p>
+                     </div>
+
+                     <div className="space-y-6">
+                        <div className="flex items-center justify-between p-5 rounded-2xl border border-white/5 bg-background/40 hover:bg-card/40 transition-colors">
+                           <div className="flex-1 pr-4">
+                              <h3 className="text-sm font-medium text-foreground/90 mb-1">Tóm tắt cuộc họp qua Email</h3>
+                              <p className="text-xs text-foreground/60 leading-relaxed">Nhận email tóm tắt chi tiết ngay sau khi AI xử lý xong bản ghi âm cuộc họp của bạn.</p>
+                           </div>
+                           <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" defaultChecked />
+                              <div className="w-11 h-6 bg-card border border-border rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground/50 peer-checked:after:bg-foreground/90 after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent peer-checked:border-accent"></div>
+                           </label>
+                        </div>
+                        
+                        <div className="flex items-center justify-between p-5 rounded-2xl border border-white/5 bg-background/40 hover:bg-card/40 transition-colors">
+                           <div className="flex-1 pr-4">
+                              <h3 className="text-sm font-medium text-foreground/90 mb-1">Cảnh báo hành động (Action Items)</h3>
+                              <p className="text-xs text-foreground/60 leading-relaxed">Thông báo đẩy khi bạn được phân công một công việc mới trong biên bản họp.</p>
+                           </div>
+                           <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" defaultChecked />
+                              <div className="w-11 h-6 bg-card border border-border rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground/50 peer-checked:after:bg-foreground/90 after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent peer-checked:border-accent"></div>
+                           </label>
+                        </div>
+
+                        <div className="flex items-center justify-between p-5 rounded-2xl border border-white/5 bg-background/40 hover:bg-card/40 transition-colors">
+                           <div className="flex-1 pr-4">
+                              <h3 className="text-sm font-medium text-foreground/90 mb-1">Cập nhật Sản phẩm & Ưu đãi</h3>
+                              <p className="text-xs text-foreground/60 leading-relaxed">Nhận email định kỳ về các tính năng mới và chương trình nâng cấp gói.</p>
+                           </div>
+                           <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" />
+                              <div className="w-11 h-6 bg-card border border-border rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground/50 peer-checked:after:bg-foreground/90 after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent peer-checked:border-accent"></div>
+                           </label>
+                        </div>
+                     </div>
+                  </div>
+               )}
+
+               {/* 5. BILLING SETTINGS */}
+               {activeTab === 'billing' && (
+                  <div className="space-y-10 animate-in fade-in duration-500">
+                     <div className="border-b border-border pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                           <h2 className="text-xl font-medium text-foreground/90 mb-1">Gói & Thanh toán</h2>
+                           <p className="text-sm text-foreground/80">Quản lý gói đăng ký hiện tại và lịch sử giao dịch của không gian làm việc.</p>
+                        </div>
+                        <button className="px-5 py-2.5 rounded-xl text-sm font-medium bg-white/5 hover:bg-white/10 border border-white/10 transition-colors w-fit">Nâng cấp gói</button>
+                     </div>
+
+                     {/* Current Plan Card */}
+                     <div className="relative overflow-hidden rounded-[2rem] border border-accent/20 bg-accent/5 p-8 shadow-inner">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 rounded-full blur-[60px] pointer-events-none -translate-y-1/2 translate-x-1/2"></div>
+                        
+                        <div className="relative z-10">
+                           <div className="flex items-center justify-between mb-8">
+                              <div>
+                                 <h3 className="text-lg font-medium tracking-wide flex items-center gap-3">
+                                    Pro Workspace 
+                                    <span className="text-[10px] uppercase tracking-widest bg-accent/20 text-accent px-2 py-0.5 rounded-full border border-accent/20">Đang sử dụng</span>
+                                 </h3>
+                                 <p className="text-sm text-foreground/60 mt-1">Chu kỳ thanh toán tiếp theo: 15/04/2026</p>
+                              </div>
+                              <div className="text-right">
+                                 <span className="text-3xl font-medium tracking-tight">$29</span>
+                                 <span className="text-sm text-foreground/60">/tháng</span>
+                              </div>
+                           </div>
+
+                           {/* Usage Bar */}
+                           <div className="space-y-3">
+                              <div className="flex justify-between text-sm">
+                                 <span className="font-medium text-foreground/80">Thời lượng giải mã AI</span>
+                                 <span className="text-foreground/60">42 / 100 giờ</span>
+                              </div>
+                              <div className="w-full bg-background/50 border border-white/5 rounded-full h-2.5 overflow-hidden">
+                                 <div className="bg-gradient-to-r from-accent/80 to-accent h-full rounded-full w-[42%] shadow-[0_0_10px_rgba(212,175,55,0.5)]"></div>
+                              </div>
+                              <p className="text-xs text-foreground/50">Đã làm mới vào 15/03/2026</p>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Invoices */}
+                     <div className="space-y-4">
+                        <h3 className="text-sm font-medium tracking-wide uppercase text-foreground/80 mb-4">Lịch sử giao dịch</h3>
+                        <div className="border border-white/5 rounded-2xl overflow-hidden bg-background/20">
+                           <table className="w-full text-sm text-left">
+                              <thead className="bg-card/40 text-foreground/60 text-xs uppercase tracking-wider">
+                                 <tr>
+                                    <th className="px-6 py-4 font-medium">Hóa đơn</th>
+                                    <th className="px-6 py-4 font-medium hidden md:table-cell">Trạng thái</th>
+                                    <th className="px-6 py-4 font-medium">Số tiền</th>
+                                    <th className="px-6 py-4 font-medium text-right">Tải xuống</th>
+                                 </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5">
+                                 <tr className="hover:bg-card/20 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-foreground/90">Tháng 3, 2026</td>
+                                    <td className="px-6 py-4 hidden md:table-cell"><span className="text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-full text-xs">Thành công</span></td>
+                                    <td className="px-6 py-4 font-medium">$29.00</td>
+                                    <td className="px-6 py-4 text-right"><button className="text-accent hover:text-accent/80 text-xs font-medium uppercase tracking-wider">PDF</button></td>
+                                 </tr>
+                                 <tr className="hover:bg-card/20 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-foreground/90">Tháng 2, 2026</td>
+                                    <td className="px-6 py-4 hidden md:table-cell"><span className="text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-full text-xs">Thành công</span></td>
+                                    <td className="px-6 py-4 font-medium">$29.00</td>
+                                    <td className="px-6 py-4 text-right"><button className="text-accent hover:text-accent/80 text-xs font-medium uppercase tracking-wider">PDF</button></td>
+                                 </tr>
+                              </tbody>
+                           </table>
+                        </div>
+                     </div>
                   </div>
                )}
 
                {/* Global Save Button for forms */}
                {(activeTab === 'profile' || activeTab === 'security') && (
-                  <div className="pt-8 mt-10 border-t border-border flex justify-end">
-                     <button className="bg-accent text-accent-foreground px-8 py-3 rounded-xl font-medium text-sm hover:scale-[1.02] transition-transform shadow-[0_4px_14px_rgba(212,175,55,0.2)]">Lưu thay đổi</button>
+                  <div className="pt-8 mt-10 border-t border-border flex items-center justify-between">
+                     <div className="flex-1">
+                        {message && (
+                           <span className={`text-sm font-medium ${message.type === 'success' ? 'text-emerald-500' : 'text-red-400'}`}>
+                              {message.text}
+                           </span>
+                        )}
+                     </div>
+                     <button 
+                        onClick={handleSave}
+                        disabled={loading}
+                        className={`bg-accent text-accent-foreground px-8 py-3 rounded-xl font-medium text-sm transition-all ${loading ? 'opacity-70 cursor-wait' : 'hover:scale-[1.02] shadow-[0_4px_14px_rgba(212,175,55,0.2)]'}`}
+                     >
+                        {loading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                     </button>
                   </div>
                )}
 

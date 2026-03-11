@@ -12,6 +12,10 @@ class UserProfileUpdate(BaseModel):
     display_name: Optional[str] = None
     title: Optional[str] = None
 
+class UserPasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
+
 class User(BaseModel):
     id: str
     email: EmailStr

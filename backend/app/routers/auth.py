@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from app.models.schemas import UserCreate, UserProfileUpdate, User, Token
+from app.models.schemas import UserCreate, UserProfileUpdate, UserPasswordUpdate, User, Token
 from app.services.auth_service import AuthService
 from app.repositories.sql_repos import SqlUserRepository
 from app.database import get_db
@@ -27,4 +27,16 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), service: AuthS
 
 @router.put("/profile", response_model=User)
 async def update_profile(email: str, update_data: UserProfileUpdate, service: AuthService = Depends(get_auth_service)):
-    return service.update_profile(email, update_data)
+    user = service.update_profile(email, update_data)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+@router.put("/password")
+async def update_password(email: str, update_data: UserPasswordUpdate, service: AuthService = Depends(get_auth_service)):
+    result = service.update_password(email, update_data)
+    if result is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if result is False:
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    return {"message": "Password updated successfully"}
