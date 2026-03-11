@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SynapNote AI
 
-## Getting Started
+Dự án Next.js cung cấp giao diện quản trị và công cụ AI hỗ trợ ghi chú, phân tích cuộc họp.
 
-First, run the development server:
+## 🚀 Hướng Dẫn Cài Đặt và Chạy Dự Án
+
+Làm theo các bước dưới đây để cài đặt và chạy dự án không gặp lỗi:
+
+### 1. Yêu cầu hệ thống
+- **Node.js**: Phiên bản 20.x trở lên (khuyến nghị).
+- **Trình quản lý gói**: npm (hoặc yarn, pnpm).
+
+### 2. Cài đặt thư viện
+Mở terminal tại thư mục gốc của dự án (`SynapNote-AI-`) và chạy lệnh sau để cài đặt tất cả các dependencies:
+
+```bash
+npm install
+```
+*(Lưu ý: Nếu bạn sử dụng yarn hoặc pnpm, hãy dùng lệnh tương ứng `yarn install` hoặc `pnpm install`)*
+
+### 3. Chạy môi trường phát triển (Development)
+Sau khi cài đặt xong, khởi chạy server development bằng lệnh:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 4. Truy cập giao diện
+Mở trình duyệt và truy cập vào đường dẫn:
+[http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🛠️ Các Lệnh Khác
 
-## Learn More
+- **Build cho Production**:
+  ```bash
+  npm run build
+  ```
+- **Chạy Production Server (sau khi đã build)**:
+  ```bash
+  npm start
+  ```
+- **Chạy Linter**:
+  ```bash
+  npm run lint
+  ```
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📦 Stack Công Nghệ Chính
+- **Framework**: Next.js 16.1 (App Router)
+- **UI & Styling**: Tailwind CSS, Lucide React
+- **Ngôn ngữ**: TypeScript
