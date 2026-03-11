@@ -25,6 +25,9 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
           </div>
           <input 
             type="text" 
+            name="global_search"
+            autoComplete="off"
+            spellCheck="false"
             placeholder="Tìm kiếm bản dịch, cuộc họp, nội dung..." 
             onFocus={() => setIsSearching(true)}
             onBlur={() => setIsSearching(false)}
