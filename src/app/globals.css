@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+:root {
+  /* Nền chính: Obsidian siêu sâu */
+  --background: #050505;
+
+  /* Chữ chính: Trắng tinh cho độ tương phản tối đa */
+  --foreground: #FFFFFF;
+
+  /* Nền Card/Sidebar: Đen ánh xám nhạt để nổi lên khỏi background */
+  --card: #0A0A0B;
+
+  /* Viền (Borders): Rất mỏng và tinh tế */
+  --border: #1F1F22;
+
+  /* Màu nhấn chính (Primary Accent): Champagne Gold sang trọng */
+  --accent: #D4AF37;
+  --accent-foreground: #000000;
+
+  /* Màu nhấn phụ (Secondary): Xám trung tính ấm */
+  --secondary: #27272A;
+
+  /* Trạng thái */
+  --success: #10B981;
+  --error: #EF4444;
+  --warning: #F59E0B;
+}
+
+/* Fix trình duyệt autofill làm hỏng giao diện (nền trắng) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active{
+    -webkit-box-shadow: 0 0 0 30px var(--card) inset !important;
+    -webkit-text-fill-color: var(--foreground) !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-secondary: var(--secondary);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+/* Base custom styles for scrollbars - Luxury feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--secondary);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  background: rgba(10, 10, 11, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.gold-glow {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
+}
