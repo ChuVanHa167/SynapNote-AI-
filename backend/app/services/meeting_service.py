@@ -86,3 +86,6 @@ class MeetingService:
         self.meeting_repo.update(meeting_id, updates)
         print(f"[MeetingService] Hoàn tất quá trình AI cho cuộc họp {meeting_id}")
 
+    def delete_meeting(self, meeting_id: str) -> bool:
+        return self.meeting_repo.delete(meeting_id)
+

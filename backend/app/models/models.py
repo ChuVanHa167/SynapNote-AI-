@@ -13,7 +13,14 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False)
     display_name = Column(String(100), nullable=False)
     title = Column(String(100))
+    avatar_url = Column(String(500))
     hashed_password = Column(String(255), nullable=False)
+    
+    # Notification Preferences
+    email_summaries = Column(Integer, default=1)  # 1 for True, 0 for False (standard for most DBs)
+    action_item_alerts = Column(Integer, default=1)
+    product_updates = Column(Integer, default=0)
+    
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
     updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
 

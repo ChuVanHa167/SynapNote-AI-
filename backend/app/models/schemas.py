@@ -11,6 +11,10 @@ class UserCreate(BaseModel):
 class UserProfileUpdate(BaseModel):
     display_name: Optional[str] = None
     title: Optional[str] = None
+    avatar_url: Optional[str] = None
+    email_summaries: Optional[bool] = None
+    action_item_alerts: Optional[bool] = None
+    product_updates: Optional[bool] = None
 
 class UserPasswordUpdate(BaseModel):
     current_password: str
@@ -21,7 +25,11 @@ class User(BaseModel):
     email: EmailStr
     display_name: str
     title: Optional[str] = None
+    avatar_url: Optional[str] = None
     hashed_password: str
+    email_summaries: bool = True
+    action_item_alerts: bool = True
+    product_updates: bool = False
 
 class Token(BaseModel):
     access_token: str
@@ -50,6 +58,7 @@ class Meeting(MeetingBase):
     transcript: Optional[str] = None
     audio_url: Optional[str] = None
     video_url: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 # 3. Chat Models
 class ChatMessage(BaseModel):

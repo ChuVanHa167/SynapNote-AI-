@@ -13,6 +13,7 @@ class AuthService:
             id=str(uuid.uuid4()),
             email=user_create.email,
             display_name=user_create.display_name,
+            avatar_url=None,
             hashed_password=hashed_pw
         )
         return self.user_repo.create(user)
@@ -23,6 +24,12 @@ class AuthService:
             return False
         # Mock check
         return user.hashed_password == f"mock_hash_{password}" or user.email == "admin@synapnote.com"
+
+    def get_profile(self, email: str) -> User:
+        user = self.user_repo.get_by_email(email)
+        if not user:
+            return None
+        return user
 
     def update_profile(self, email: str, update_data: UserProfileUpdate):
         user = self.user_repo.get_by_email(email)

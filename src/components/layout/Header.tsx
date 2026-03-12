@@ -3,10 +3,22 @@
 import { Search, Menu, Bell, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { APP_CONFIG } from '@/config/constants';
+import { useUser } from '@/context/UserContext';
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const [isSearching, setIsSearching] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const { user } = useUser();
+  const router = useRouter();
+
+  const handleSearch = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && searchValue.trim()) {
+      router.push(`/meetings?search=${encodeURIComponent(searchValue.trim())}`);
+      setSearchValue("");
+    }
+  };
 
   return (
     <header className="h-24 px-8 lg:px-12 flex items-center justify-between w-full bg-background/40 backdrop-blur-[20px] sticky top-0 z-30 border-b border-border transition-all duration-300">
@@ -29,8 +41,11 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             autoComplete="off"
             spellCheck="false"
             placeholder="Tìm kiếm bản dịch, cuộc họp, nội dung..." 
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
             onFocus={() => setIsSearching(true)}
             onBlur={() => setIsSearching(false)}
+            onKeyDown={handleSearch}
             className="w-full bg-transparent h-12 pr-6 text-sm text-foreground placeholder:text-foreground/30 focus:outline-none transition-all"
           />
           {isSearching && (
@@ -51,15 +66,15 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         {/* Minimal User Avatar with Logout logic */}
         <div className="flex items-center gap-4 pl-6 border-l border-border transition-all">
           <div className="hidden md:flex flex-col items-end justify-center">
-            <span className="text-sm font-medium text-foreground/90 tracking-wide">Alexander</span>
-            <span className="text-[10px] text-accent font-semibold tracking-widest uppercase mt-0.5">Quản trị viên</span>
+            <span className="text-sm font-medium text-foreground/90 tracking-wide">{user?.display_name || "Alexander"}</span>
+            <span className="text-[10px] text-accent font-semibold tracking-widest uppercase mt-0.5">{user?.title || "Quản trị viên"}</span>
           </div>
           
           <div className="relative group/avatar">
             <div className="w-10 h-10 rounded-full cursor-pointer hover:scale-105 transition-transform overflow-hidden border border-white/10 relative p-0.5 shadow-lg group-hover/avatar:border-accent/40">
               <div className="absolute inset-0 bg-gradient-to-tr from-accent/40 to-transparent opacity-50"></div>
               <img 
-                src={`${APP_CONFIG.urls.defaultAvatarGenerator}?seed=Alex&backgroundColor=transparent`} 
+                src={user?.avatar_url || `${APP_CONFIG.urls.defaultAvatarGenerator}?seed=${user?.display_name || 'Alex'}&backgroundColor=transparent`} 
                 alt="Avatar" 
                 className="w-full h-full object-cover rounded-full bg-[#1F1F22] z-10 relative" 
               />

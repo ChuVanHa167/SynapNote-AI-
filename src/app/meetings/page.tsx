@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, Filter, Clock, MoreHorizontal, FileVideo, Plus, Loader2 } from 'lucide-react';
+import { Search, Filter, Clock, MoreHorizontal, FileVideo, Plus, Loader2, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 interface Meeting {
   id: string;
@@ -11,12 +13,25 @@ interface Meeting {
   duration: string;
   participants: number;
   status: string;
+  created_at?: string;
 }
 
-export default function MeetingsPage() {
+// Separate the content to use useSearchParams safely
+function MeetingsContent() {
+  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
+  useEffect(() => {
+    const search = searchParams.get('search');
+    if (search) {
+      setSearchQuery(search);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchMeetings = async () => {
@@ -35,6 +50,24 @@ export default function MeetingsPage() {
     fetchMeetings();
   }, []);
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa cuộc họp này không?")) return;
+    
+    try {
+      const response = await fetch(`http://localhost:8000/meetings/${id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setMeetings(prev => prev.filter(m => m.id !== id));
+        setActiveMenu(null);
+      } else {
+        alert("Xóa cuộc họp thất bại.");
+      }
+    } catch (error) {
+      console.error("Error deleting meeting:", error);
+    }
+  };
+
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'HOÀN THÀNH':
@@ -48,9 +81,41 @@ export default function MeetingsPage() {
     }
   };
 
-  const filteredMeetings = meetings.filter(m => 
-    m.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredMeetings = meetings.filter(m => {
+    const matchesSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (timeFilter === 'all') return matchesSearch;
+    
+    if (!m.created_at) return matchesSearch; // Fallback for old data
+    
+    const createdDate = new Date(m.created_at);
+    const now = new Date();
+    
+    if (timeFilter === 'today') {
+      return matchesSearch && createdDate.toDateString() === now.toDateString();
+    }
+    
+    if (timeFilter === 'week') {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(now.getDate() - 7);
+      return matchesSearch && createdDate >= oneWeekAgo;
+    }
+    
+    if (timeFilter === 'month') {
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(now.getMonth() - 1);
+      return matchesSearch && createdDate >= oneMonthAgo;
+    }
+    
+    return matchesSearch;
+  });
+
+  const timeFilterLabels = {
+    all: 'Tất cả thời gian',
+    today: 'Hôm nay',
+    week: 'Tuần này',
+    month: 'Tháng này'
+  };
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:p-10 hide-scrollbar flex flex-col gap-8 h-full">
@@ -76,13 +141,46 @@ export default function MeetingsPage() {
                placeholder="Tìm kiếm cuộc họp theo tên, từ khóa..." 
                value={searchQuery}
                onChange={(e) => setSearchQuery(e.target.value)}
-               className="w-full bg-card/40 border border-border focus:border-accent/50 rounded-xl py-3 pl-11 pr-4 text-sm focus:outline-none transition-all shadow-inner"
+               className="w-full bg-card/40 border border-border focus:border-accent/50 rounded-xl py-3 pl-11 pr-10 text-sm focus:outline-none transition-all shadow-inner"
             />
+            {searchQuery && (
+               <button 
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
+               >
+                  <X size={16} />
+               </button>
+            )}
          </div>
-         <button className="glass-panel px-4 py-3 rounded-xl border border-border hover:border-accent/30 hover:text-accent transition-colors flex items-center gap-2 text-sm text-foreground/80">
-            <Filter size={16} />
-            Lọc theo thời gian
-         </button>
+         <div className="relative">
+            <button 
+               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+               className={`glass-panel px-4 py-3 rounded-xl border transition-colors flex items-center gap-2 text-sm ${showFilterDropdown ? 'border-accent text-accent' : 'border-border text-foreground/80 hover:border-accent/30 hover:text-accent'}`}
+            >
+               <Filter size={16} />
+               {timeFilter === 'all' ? 'Lọc theo thời gian' : timeFilterLabels[timeFilter]}
+            </button>
+            
+            {showFilterDropdown && (
+               <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowFilterDropdown(false)}></div>
+                  <div className="absolute right-0 sm:left-0 top-full mt-2 w-48 glass-panel rounded-xl border border-border shadow-2xl z-50 py-2 animate-in fade-in zoom-in-95 duration-200">
+                     {(['all', 'today', 'week', 'month'] as const).map((filter) => (
+                        <button
+                           key={filter}
+                           onClick={() => {
+                              setTimeFilter(filter);
+                              setShowFilterDropdown(false);
+                           }}
+                           className={`w-full text-left px-4 py-2 text-xs font-medium transition-colors hover:bg-card/60 ${timeFilter === filter ? 'text-accent' : 'text-foreground/80'}`}
+                        >
+                           {timeFilterLabels[filter]}
+                        </button>
+                     ))}
+                  </div>
+               </>
+            )}
+         </div>
       </div>
 
       {/* Meetings List */}
@@ -135,8 +233,25 @@ export default function MeetingsPage() {
                                  {item.status}
                               </span>
                            </td>
-                           <td className="px-8 py-5 text-right text-foreground/30">
-                              <button className="hover:text-foreground transition-colors p-2"><MoreHorizontal size={16} /></button>
+                           <td className="px-8 py-5 text-right relative">
+                              <button 
+                                 onClick={() => setActiveMenu(activeMenu === item.id ? null : item.id)}
+                                 className="hover:text-foreground transition-colors p-2 text-foreground/30 group-hover:text-foreground/60"
+                              >
+                                 <MoreHorizontal size={16} />
+                              </button>
+                              
+                              {activeMenu === item.id && (
+                                 <div className="absolute right-8 top-12 w-48 glass-panel rounded-xl border border-border shadow-2xl z-50 py-2 animate-in fade-in zoom-in-95 duration-200">
+                                    <button 
+                                       onClick={() => handleDelete(item.id)}
+                                       className="w-full text-left px-4 py-2 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2 text-xs font-medium"
+                                    >
+                                       <Trash2 size={14} />
+                                       Xóa cuộc họp
+                                    </button>
+                                 </div>
+                              )}
                            </td>
                         </tr>
                      ))}
@@ -147,5 +262,17 @@ export default function MeetingsPage() {
       </div>
 
     </div>
+  );
+}
+
+export default function MeetingsPage() {
+  return (
+    <Suspense fallback={
+       <div className="w-full h-full flex items-center justify-center p-20">
+          <Loader2 className="text-accent animate-spin" size={32} />
+       </div>
+    }>
+      <MeetingsContent />
+    </Suspense>
   );
 }

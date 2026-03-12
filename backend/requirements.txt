@@ -7,3 +7,4 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.1
 moviepy==1.0.3
 sqlalchemy
+pymysql

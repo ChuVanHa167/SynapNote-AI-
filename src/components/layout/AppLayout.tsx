@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { APP_CONFIG } from '@/config/constants';
+import { UserProvider } from '@/context/UserContext';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -12,7 +13,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isAuthPage = pathname === '/login' || pathname === '/register';
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
+    <UserProvider>
+      <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
       {/* Dynamic Background Effects */}
       <div className="fixed inset-0 pointer-events-none z-[-1] overflow-hidden">
          {/* Subtle glowing orbs */}
@@ -40,5 +42,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+    </UserProvider>
   );
 }

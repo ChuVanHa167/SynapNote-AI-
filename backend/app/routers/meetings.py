@@ -44,3 +44,10 @@ async def upload_audio(
     background_tasks.add_task(service.process_ai_summary, new_meeting.id, file_path)
     
     return new_meeting
+
+@router.delete("/{meeting_id}")
+async def delete_meeting(meeting_id: str, service: MeetingService = Depends(get_meeting_service)):
+    if not service.delete_meeting(meeting_id):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    return {"message": "Meeting deleted successfully"}

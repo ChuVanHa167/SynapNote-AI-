@@ -25,6 +25,9 @@ class IMeetingRepository(ABC):
     @abstractmethod
     def update(self, meeting_id: str, data: dict) -> Meeting: pass
 
+    @abstractmethod
+    def delete(self, meeting_id: str) -> bool: pass
+
 class IApiKeyRepository(ABC):
     @abstractmethod
     def get_keys(self) -> List[APIKey]: pass

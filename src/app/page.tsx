@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { FileVideo, Clock, Sparkles, MoveUpRight, MoreHorizontal, ArrowRight, Loader2 } from 'lucide-react';
+import { FileVideo, Clock, Sparkles, MoveUpRight, MoreHorizontal, ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
+import { useUser } from '@/context/UserContext';
 
 interface Meeting {
    id: string;
@@ -14,8 +15,10 @@ interface Meeting {
 }
 
 export default function Dashboard() {
+   const { user } = useUser();
    const [meetings, setMeetings] = useState<Meeting[]>([]);
    const [isLoading, setIsLoading] = useState(true);
+   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
    useEffect(() => {
       const fetchMeetings = async () => {
@@ -33,6 +36,24 @@ export default function Dashboard() {
       };
       fetchMeetings();
    }, []);
+
+   const handleDelete = async (id: string) => {
+      if (!confirm("Bạn có chắc chắn muốn xóa cuộc họp này không?")) return;
+      
+      try {
+         const response = await fetch(`http://localhost:8000/meetings/${id}`, {
+            method: 'DELETE',
+         });
+         if (response.ok) {
+            setMeetings(prev => prev.filter(m => m.id !== id));
+            setActiveMenu(null);
+         } else {
+            alert("Xóa cuộc họp thất bại.");
+         }
+      } catch (error) {
+         console.error("Error deleting meeting:", error);
+      }
+   };
 
    // Compute stats
    const totalMeetings = meetings.length;
@@ -85,10 +106,12 @@ export default function Dashboard() {
          {/* Welcome Section */}
          <section className="animate-in fade-in slide-in-from-bottom-4 duration-700 flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
-               <h1 className="text-3xl font-medium tracking-tight mb-2 flex items-center gap-3">
-                  <span className="text-foreground/90">Chào buổi tối,</span>
-                  <span className="font-semibold bg-gradient-to-r from-accent to-amber-200 bg-clip-text text-transparent">Alexander</span>
-               </h1>
+                <h1 className="text-3xl font-medium tracking-tight mb-2 flex items-center gap-3">
+                   <span className="text-foreground/90">Chào buổi tối,</span>
+                   <span className="font-semibold bg-gradient-to-r from-accent to-amber-200 bg-clip-text text-transparent">
+                      {user?.display_name || "Alexander"}
+                   </span>
+                </h1>
                <p className="text-foreground/80 text-sm tracking-wide">Bạn có {pendingMeetings} bản tóm tắt đang chờ xem lại hôm nay.</p>
             </div>
             <Link href="/upload" className="glass-panel px-6 py-3 rounded-xl text-sm font-medium hover:border-accent/50 hover:text-accent transition-all flex items-center gap-2 group border border-border">
@@ -162,9 +185,26 @@ export default function Dashboard() {
                                        {item.status}
                                     </span>
                                  </td>
-                                 <td className="px-8 py-5 text-right text-foreground/30">
-                                    <button className="hover:text-foreground transition-colors p-2"><MoreHorizontal size={16} /></button>
-                                 </td>
+                                  <td className="px-8 py-5 text-right relative">
+                                     <button 
+                                        onClick={() => setActiveMenu(activeMenu === item.id ? null : item.id)}
+                                        className="hover:text-foreground transition-colors p-2 text-foreground/30 group-hover:text-foreground/60"
+                                     >
+                                        <MoreHorizontal size={16} />
+                                     </button>
+                                     
+                                     {activeMenu === item.id && (
+                                        <div className="absolute right-8 top-12 w-48 glass-panel rounded-xl border border-border shadow-2xl z-50 py-2 animate-in fade-in zoom-in-95 duration-200 text-left">
+                                           <button 
+                                              onClick={() => handleDelete(item.id)}
+                                              className="w-full text-left px-4 py-2 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2 text-xs font-medium"
+                                           >
+                                              <Trash2 size={14} />
+                                              Xóa cuộc họp
+                                           </button>
+                                        </div>
+                                     )}
+                                  </td>
                               </tr>
                            ))}
                         </tbody>

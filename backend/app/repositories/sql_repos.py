@@ -49,6 +49,14 @@ class SqlMeetingRepository(IMeetingRepository):
             return self._to_schema(db_meeting)
         return None
 
+    def delete(self, meeting_id: str) -> bool:
+        db_meeting = self.db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
+        if db_meeting:
+            self.db.delete(db_meeting)
+            self.db.commit()
+            return True
+        return False
+
     def _to_schema(self, db_meeting: models.Meeting) -> schemas.Meeting:
         # Map ORM to Pydantic
         action_items = [
@@ -74,6 +82,7 @@ class SqlMeetingRepository(IMeetingRepository):
             transcript=db_meeting.transcript,
             audio_url=db_meeting.audio_url,
             video_url=db_meeting.video_url,
+            created_at=db_meeting.created_at,
             decisions=decisions,
             action_items=action_items
         )
@@ -90,7 +99,11 @@ class SqlUserRepository(IUserRepository):
                 email=db_user.email,
                 display_name=db_user.display_name,
                 title=db_user.title,
-                hashed_password=db_user.hashed_password
+                avatar_url=db_user.avatar_url,
+                hashed_password=db_user.hashed_password,
+                email_summaries=bool(db_user.email_summaries),
+                action_item_alerts=bool(db_user.action_item_alerts),
+                product_updates=bool(db_user.product_updates)
             )
         return None
 
@@ -100,7 +113,11 @@ class SqlUserRepository(IUserRepository):
             email=user.email,
             display_name=user.display_name,
             title=user.title,
-            hashed_password=user.hashed_password
+            avatar_url=user.avatar_url,
+            hashed_password=user.hashed_password,
+            email_summaries=int(user.email_summaries),
+            action_item_alerts=int(user.action_item_alerts),
+            product_updates=int(user.product_updates)
         )
         self.db.add(db_user)
         self.db.commit()
@@ -110,7 +127,11 @@ class SqlUserRepository(IUserRepository):
             email=db_user.email,
             display_name=db_user.display_name,
             title=db_user.title,
-            hashed_password=db_user.hashed_password
+            avatar_url=db_user.avatar_url,
+            hashed_password=db_user.hashed_password,
+            email_summaries=bool(db_user.email_summaries),
+            action_item_alerts=bool(db_user.action_item_alerts),
+            product_updates=bool(db_user.product_updates)
         )
 
     def update(self, user_id: str, data: dict) -> schemas.User:
@@ -118,7 +139,10 @@ class SqlUserRepository(IUserRepository):
         if db_user:
             for key, value in data.items():
                 if hasattr(db_user, key):
-                    setattr(db_user, key, value)
+                    if isinstance(value, bool):
+                        setattr(db_user, key, int(value))
+                    else:
+                        setattr(db_user, key, value)
             self.db.commit()
             self.db.refresh(db_user)
             return schemas.User(
@@ -126,6 +150,10 @@ class SqlUserRepository(IUserRepository):
                 email=db_user.email,
                 display_name=db_user.display_name,
                 title=db_user.title,
-                hashed_password=db_user.hashed_password
+                avatar_url=db_user.avatar_url,
+                hashed_password=db_user.hashed_password,
+                email_summaries=bool(db_user.email_summaries),
+                action_item_alerts=bool(db_user.action_item_alerts),
+                product_updates=bool(db_user.product_updates)
             )
         return None

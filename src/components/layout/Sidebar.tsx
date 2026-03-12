@@ -80,16 +80,18 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         
         {/* BOTTOM AREA */}
         <div className="p-8 absolute bottom-0 left-0 right-0">
-          <div className="glass-panel p-4 rounded-2xl flex items-center justify-between border border-white/5 relative overflow-hidden group hover:border-accent/30 transition-colors cursor-pointer">
-             <div className="absolute inset-0 bg-gradient-to-tr from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div>
-                <p className="text-xs text-foreground/80 font-medium tracking-wider uppercase mb-1">Nâng cấp gói</p>
-                <p className="text-sm text-foreground/90 font-medium">Pro Workspace</p>
-             </div>
-             <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent">
-                →
-             </div>
-          </div>
+          <Link href="/settings?tab=billing" className="block">
+            <div className="glass-panel p-4 rounded-2xl flex items-center justify-between border border-white/5 relative overflow-hidden group hover:border-accent/30 transition-colors cursor-pointer">
+               <div className="absolute inset-0 bg-gradient-to-tr from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+               <div>
+                  <p className="text-xs text-foreground/80 font-medium tracking-wider uppercase mb-1">Nâng cấp gói</p>
+                  <p className="text-sm text-foreground/90 font-medium">Pro Workspace</p>
+               </div>
+               <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent group-hover:text-accent-foreground transition-all">
+                  <Presentation size={14} />
+               </div>
+            </div>
+          </Link>
         </div>
       </aside>
     </>
