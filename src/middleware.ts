@@ -18,14 +18,15 @@ export function middleware(request: NextRequest) {
   if (!hasSession && !isAuthRoute) {
     // Chưa đăng nhập mà vào các trang bảo vệ (/, /meetings, /settings...) -> Đá về login
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('from', pathname); // Lưu lại đường dẫn cũ để redirect lại sau khi login thành công
+    loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (hasSession && isAuthRoute) {
-    // Đã đăng nhập rồi mà cố tình vào lại trang login -> Đá về trang chủ
-    return NextResponse.redirect(new URL('/', request.url));
-  }
+  // Cho phép vào trang auth kể cả khi đã có session (để có thể "đăng xuất" hoặc chuyển tài khoản)
+  // Bỏ chặn hasSession && isAuthRoute
+
+  // Cho phép đi tiếp nếu thỏa mãn điều kiện
+  return NextResponse.next();
 
   // Cho phép đi tiếp nếu thỏa mãn điều kiện
   return NextResponse.next();
