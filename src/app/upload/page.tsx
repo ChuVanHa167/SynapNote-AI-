@@ -3,10 +3,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { UploadCloud, AudioLines, Type, Clock, FileVideo } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { ProcessingOverlay } from '@/components/upload/ProcessingOverlay';
 
 export default function Home() {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -54,13 +56,18 @@ export default function Home() {
       const data = await response.json();
       console.log("Upload Success:", data);
 
-      router.push(`/meetings`);
+      // Show processing overlay
+      setShowOverlay(true);
+      
     } catch (error) {
       console.error(error);
       alert("Tải lên thất bại. Vui lòng kiểm tra lại kết nối Backend.");
-    } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleProcessingFinished = () => {
+    router.push(`/meetings`);
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -209,6 +216,11 @@ export default function Home() {
         </section>
 
       </div>
+      
+      <ProcessingOverlay 
+        isVisible={showOverlay} 
+        onFinished={handleProcessingFinished} 
+      />
     </div>
   );
 }

@@ -15,6 +15,7 @@ interface MeetingDetail {
   duration: string;
   summary: string;
   transcript: string;
+  audio_url?: string | null;
   decisions: string[];
   action_items: any[];
 }
@@ -111,6 +112,7 @@ export default function MeetingDetailPage() {
           progress={progress}
           currentTime={formatTime(currentTime)}
           duration={meeting.duration}
+          audioUrl={meeting.audio_url}
         />
 
         <TranscriptView 

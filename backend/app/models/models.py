@@ -28,6 +28,7 @@ class Meeting(Base):
     status = Column(Enum('PENDING', 'ĐANG XỬ LÝ', 'HOÀN THÀNH', 'LỖI'), default='PENDING')
     summary = Column(Text)
     transcript = Column(Text)
+    audio_url = Column(String(500))
     user_id = Column(String(36), ForeignKey("users.id"))
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
     

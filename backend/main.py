@@ -24,11 +24,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Ensure uploads directory exists
+os.makedirs("uploads", exist_ok=True)
+
 # Include Routers
 app.include_router(auth.router)
 app.include_router(meetings.router)
 app.include_router(chat.router)
 app.include_router(integrations.router)
+
+# Mount static files
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/", tags=["Health"])
 async def root():

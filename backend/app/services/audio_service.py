@@ -3,7 +3,7 @@ import uuid
 from moviepy.editor import VideoFileClip
 
 class AudioProcessingService:
-    def __init__(self, temp_dir: str = "temp"):
+    def __init__(self, temp_dir: str = "uploads"):
         self.temp_dir = temp_dir
         # Ensure temp directory exists
         os.makedirs(self.temp_dir, exist_ok=True)
