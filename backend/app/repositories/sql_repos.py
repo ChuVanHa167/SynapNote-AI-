@@ -73,6 +73,7 @@ class SqlMeetingRepository(IMeetingRepository):
             summary=db_meeting.summary,
             transcript=db_meeting.transcript,
             audio_url=db_meeting.audio_url,
+            video_url=db_meeting.video_url,
             decisions=decisions,
             action_items=action_items
         )

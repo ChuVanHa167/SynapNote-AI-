@@ -49,6 +49,7 @@ class Meeting(MeetingBase):
     action_items: Optional[List[ActionItem]] = []
     transcript: Optional[str] = None
     audio_url: Optional[str] = None
+    video_url: Optional[str] = None
 
 # 3. Chat Models
 class ChatMessage(BaseModel):

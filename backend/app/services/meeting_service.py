@@ -34,21 +34,37 @@ class MeetingService:
         print(f"[MeetingService] Bắt đầu xử lý nền cho cuộc họp {meeting_id}")
         
         # 1. Trích xuất âm thanh nếu là file Video
+        video_url = None
+        import shutil
         if saved_file_path.lower().endswith(('.mp4', '.mov', '.avi', '.mkv')):
+             # Move video to uploads/videos
+             os.makedirs("uploads/videos", exist_ok=True)
+             filename = os.path.basename(saved_file_path)
+             # Strip prefix 'raw_{id}_' if needed, or keep it. Let's keep it for uniqueness.
+             persistent_video_path = os.path.join("uploads", "videos", filename)
+             shutil.copy2(saved_file_path, persistent_video_path)
+             video_url = f"/uploads/videos/{filename}"
+
              audio_path = self.audio_service.extract_audio(saved_file_path)
              if audio_path:
                  print(f"[MeetingService] Đã trích xuất và lưu audio tại {audio_path}")
                  # Convert filename to public URL
-                 audio_url = f"http://localhost:8000/{audio_path.replace(os.sep, '/')}"
+                 audio_filename = os.path.basename(audio_path)
+                 persistent_audio_path = os.path.join("uploads", audio_filename)
+                 shutil.copy2(audio_path, persistent_audio_path)
+                 audio_url = f"/uploads/{audio_filename}"
+                 
+                 # Cleanup temp audio
+                 if os.path.exists(audio_path):
+                     os.remove(audio_path)
              else:
                  audio_url = None
         else:
-             # Nếu là audio, ta copy nó sang uploads thay vì xóa
+             # Nếu là audio, ta copy nó sang uploads
              filename = os.path.basename(saved_file_path)
              persistent_audio_path = os.path.join("uploads", filename)
-             import shutil
              shutil.copy2(saved_file_path, persistent_audio_path)
-             audio_url = f"http://localhost:8000/uploads/{filename}"
+             audio_url = f"/uploads/{filename}"
              
         # Cleanup original uploaded file (in temp folder)
         if os.path.exists(saved_file_path):
@@ -64,7 +80,8 @@ class MeetingService:
             "transcript": "Hello, let's start the meeting...",
             "summary": "This is an auto-generated AI summary after processing the media file.",
             "decisions": decision_objs,
-            "audio_url": audio_url
+            "audio_url": audio_url,
+            "video_url": video_url
         }
         self.meeting_repo.update(meeting_id, updates)
         print(f"[MeetingService] Hoàn tất quá trình AI cho cuộc họp {meeting_id}")
