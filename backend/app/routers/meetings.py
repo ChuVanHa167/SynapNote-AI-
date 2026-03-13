@@ -46,28 +46,35 @@ async def upload_audio(
     # 1. Start meeting in PENDING status
     new_meeting = service.upload_audio_and_process(file.filename, title, duration)
     
-    # 2. Save physical file to temp folder
-    temp_dir = "temp"
-    os.makedirs(temp_dir, exist_ok=True)
-    file_path = os.path.join(temp_dir, f"raw_{new_meeting.id}_{file.filename}")
+    # 2. Determine paths early (Persistent storage)
+    is_video = file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))
+    persistent_dir = "uploads/videos" if is_video else "uploads"
+    os.makedirs(persistent_dir, exist_ok=True)
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    persistent_filename = f"raw_{new_meeting.id}_{file.filename}"
+    persistent_path = os.path.join(persistent_dir, persistent_filename)
+    public_url = f"/{persistent_dir}/{persistent_filename}"
     
-    # 3. Add AI Audio + LLM transcribing to a queue/background task
-    background_tasks.add_task(run_background_processing, new_meeting.id, file_path)
+    # 3. Save physical file directly to persistent storage
+    print(f"[Upload] Đang lưu file: {file.filename}")
+    try:
+        await file.seek(0)
+        content = await file.read()
+        content_length = len(content)
+        
+        with open(persistent_path, "wb") as buffer:
+            buffer.write(content)
+        
+        # Check saved file size
+        actual_size = os.path.getsize(persistent_path)
+        print(f"[Upload] Đã lưu xong. Buffer: {content_length} bytes, Disk: {actual_size} bytes")
+        
+        if actual_size == 0 or actual_size != content_length:
+             print(f"[Upload] CẢNH BÁO: Kích thước file không khớp hoặc bằng 0!")
+             
+    except Exception as e:
+        print(f"[Upload] LỖI khi lưu file: {str(e)}")
     
-    return new_meeting
-
-@router.delete("/{meeting_id}")
-async def delete_meeting(meeting_id: str, service: MeetingService = Depends(get_meeting_service)):
-    if not service.delete_meeting(meeting_id):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Meeting not found")
-    return {"message": "Meeting deleted successfully"}
-    actual_size = os.path.getsize(persistent_path)
-    print(f"[Upload] File đã lưu tại {persistent_path}. Kích thước: {actual_size} bytes")
-
     # 4. Update DB with URL immediately so it's playable
     if is_video:
         service.meeting_repo.update(new_meeting.id, {"video_url": public_url})

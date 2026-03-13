@@ -13,6 +13,7 @@ interface MeetingDetail {
   title: string;
   date: string;
   duration: string;
+  status: string;
   summary: string;
   transcript: string;
   audio_url?: string | null;
@@ -56,6 +57,18 @@ export default function MeetingDetailPage() {
     };
     if (id) fetchDetail();
   }, [id]);
+
+  /* v2.2 FIX - DIAGNOSTIC LOGS */
+  useEffect(() => {
+    if (meeting) {
+      console.log("[v2.2] Meeting loaded:", {
+        id: meeting.id,
+        status: meeting.status,
+        video_url: meeting.video_url,
+        audio_url: meeting.audio_url
+      });
+    }
+  }, [meeting]);
 
   if (isLoading) {
     return (
@@ -107,8 +120,16 @@ export default function MeetingDetailPage() {
             <span className="flex items-center gap-1.5 glass-panel px-3 py-1.5 rounded-full"><Clock size={12} /> {meeting.date}</span>
             <span className="w-1 h-1 rounded-full bg-accent/50"></span>
             <span>Thời lượng: {meeting.duration}</span>
+            <span className="w-1 h-1 rounded-full bg-accent/50"></span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] ${
+              meeting.status === 'HOÀN THÀNH' ? 'bg-emerald-500/10 text-emerald-500' : 
+              meeting.status === 'LỖI' ? 'bg-red-500/10 text-red-500' : 
+              'bg-blue-500/10 text-blue-400 animate-pulse'
+            }`}>
+              {meeting.status}
+            </span>
           </div>
-          <h1 className="text-3xl lg:text-4xl font-light tracking-tight text-foreground/90">{meeting.title}</h1>
+          <h1 className="text-3xl lg:text-4xl font-light tracking-tight text-foreground/90">{meeting.title} <span className="opacity-30 text-xs">[v2.2 FIX]</span></h1>
         </div>
 
         {meeting.video_url ? (

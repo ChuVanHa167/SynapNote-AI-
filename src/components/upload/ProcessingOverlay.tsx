@@ -1,18 +1,20 @@
 "use client";
 
-import { Loader2, Sparkles, FileVideo, CheckCircle2 } from 'lucide-react';
+import { Loader2, Sparkles, FileVideo, CheckCircle2, UploadCloud } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface ProcessingOverlayProps {
   isVisible: boolean;
   onFinished?: () => void;
+  uploadProgress?: number; // 0 to 100
 }
 
-export function ProcessingOverlay({ isVisible, onFinished }: ProcessingOverlayProps) {
+export function ProcessingOverlay({ isVisible, onFinished, uploadProgress = 0 }: ProcessingOverlayProps) {
   const [step, setStep] = useState(0);
 
   const steps = [
-    { icon: FileVideo, text: "Đang tải video lên bộ nhớ tạm...", duration: 2000 },
+    { icon: UploadCloud, text: "Đang tải file lên hệ thống...", duration: 0 }, // Step 0: Uploading
+    { icon: FileVideo, text: "Đang kiểm tra và lưu trữ dữ liệu...", duration: 2000 },
     { icon: Loader2, text: "Đang trích xuất âm thanh chất lượng cao...", duration: 3000 },
     { icon: Sparkles, text: "AI đang phân tích và tóm tắt nội dung...", duration: 4000 },
     { icon: CheckCircle2, text: "Hoàn tất! Đang chuẩn bị Dashboard...", duration: 1500 },
@@ -24,19 +26,25 @@ export function ProcessingOverlay({ isVisible, onFinished }: ProcessingOverlayPr
       return;
     }
 
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      if (currentStep < steps.length - 1) {
-        currentStep++;
-        setStep(currentStep);
-      } else {
-        clearInterval(interval);
-        if (onFinished) onFinished();
+    // Step 0 is 'Uploading', we wait for uploadProgress to hit 100
+    if (step === 0) {
+      if (uploadProgress >= 100) {
+        setStep(1);
       }
-    }, 2500);
+      return;
+    }
 
-    return () => clearInterval(interval);
-  }, [isVisible, onFinished]);
+    // Subsequent steps are on timers
+    const timer = setTimeout(() => {
+      if (step < steps.length - 1) {
+        setStep(step + 1);
+      } else if (onFinished) {
+        onFinished();
+      }
+    }, steps[step].duration);
+
+    return () => clearTimeout(timer);
+  }, [isVisible, step, uploadProgress, onFinished]);
 
   if (!isVisible) return null;
 
@@ -83,8 +91,12 @@ export function ProcessingOverlay({ isVisible, onFinished }: ProcessingOverlayPr
         {/* Progress percent simulation */}
         <div className="mt-12 w-full bg-white/5 h-1 rounded-full overflow-hidden relative">
           <div
-            className="absolute top-0 left-0 h-full bg-accent transition-all duration-[2500ms] linear"
-            style={{ width: `${((step + 1) / steps.length) * 100}%` }}
+            className="absolute top-0 left-0 h-full bg-accent transition-all duration-300 linear"
+            style={{ 
+              width: step === 0 
+                ? `${uploadProgress * 0.25}%` 
+                : `${25 + (step / (steps.length - 1)) * 75}%` 
+            }}
           ></div>
         </div>
       </div>

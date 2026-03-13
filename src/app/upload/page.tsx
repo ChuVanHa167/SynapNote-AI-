@@ -12,6 +12,7 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -52,7 +53,11 @@ export default function Home() {
 
   const handleUploadAction = async () => {
     if (!selectedFile) return;
+    
     setIsUploading(true);
+    setUploadProgress(0);
+    setShowOverlay(true); // Show overlay immediately
+
     try {
       const duration = await getFileDuration(selectedFile);
 
@@ -60,29 +65,45 @@ export default function Home() {
       formData.append("file", selectedFile);
       formData.append("duration", duration);
 
-      // Send user's typed title if provided, else it will default in backend
       if (title.trim() !== '') {
         formData.append("title", title);
       }
 
-      const response = await fetch("http://localhost:8000/meetings/upload", {
-        method: "POST",
-        body: formData,
-      });
+      // Use XMLHttpRequest for progress tracking
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "http://localhost:8000/meetings/upload", true);
 
-      if (!response.ok) {
-        throw new Error("Lỗi khi tải file lên máy chủ");
-      }
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(percent);
+          console.log(`Upload progress: ${percent}%`);
+        }
+      };
 
-      const data = await response.json();
-      console.log("Upload Success:", data);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const data = JSON.parse(xhr.responseText);
+          console.log("Upload Success:", data);
+        } else {
+          alert("Lỗi khi tải file lên máy chủ (Status: " + xhr.status + ")");
+          setShowOverlay(false);
+          setIsUploading(false);
+        }
+      };
 
-      // Show processing overlay
-      setShowOverlay(true);
+      xhr.onerror = () => {
+        alert("Tải lên thất bại. Vui lòng kiểm tra lại kết nối Backend.");
+        setShowOverlay(false);
+        setIsUploading(false);
+      };
+
+      xhr.send(formData);
 
     } catch (error) {
       console.error(error);
-      alert("Tải lên thất bại. Vui lòng kiểm tra lại kết nối Backend.");
+      alert("Đã xảy ra lỗi không mong muốn.");
+      setShowOverlay(false);
       setIsUploading(false);
     }
   };
@@ -241,6 +262,7 @@ export default function Home() {
       <ProcessingOverlay
         isVisible={showOverlay}
         onFinished={handleProcessingFinished}
+        uploadProgress={uploadProgress}
       />
     </div>
   );
