@@ -32,12 +32,33 @@ export default function Home() {
     setIsDragActive(false);
   }, []);
 
+  const getFileDuration = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const element = document.createElement(file.type.startsWith('video') ? 'video' : 'audio');
+      element.preload = 'metadata';
+      element.onloadedmetadata = () => {
+        URL.revokeObjectURL(element.src);
+        const seconds = Math.floor(element.duration);
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        resolve(`${minutes}m ${remainingSeconds}s`);
+      };
+      element.onerror = () => {
+        resolve("0m 0s");
+      };
+      element.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleUploadAction = async () => {
     if (!selectedFile) return;
     setIsUploading(true);
     try {
+      const duration = await getFileDuration(selectedFile);
+
       const formData = new FormData();
       formData.append("file", selectedFile);
+      formData.append("duration", duration);
 
       // Send user's typed title if provided, else it will default in backend
       if (title.trim() !== '') {
@@ -58,7 +79,7 @@ export default function Home() {
 
       // Show processing overlay
       setShowOverlay(true);
-      
+
     } catch (error) {
       console.error(error);
       alert("Tải lên thất bại. Vui lòng kiểm tra lại kết nối Backend.");
@@ -216,10 +237,10 @@ export default function Home() {
         </section>
 
       </div>
-      
-      <ProcessingOverlay 
-        isVisible={showOverlay} 
-        onFinished={handleProcessingFinished} 
+
+      <ProcessingOverlay
+        isVisible={showOverlay}
+        onFinished={handleProcessingFinished}
       />
     </div>
   );

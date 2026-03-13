@@ -22,15 +22,29 @@ async def list_meetings(service: MeetingService = Depends(get_meeting_service)):
 async def get_meeting(meeting_id: str, service: MeetingService = Depends(get_meeting_service)):
     return service.get_meeting(meeting_id)
 
+def run_background_processing(meeting_id: str, file_path: str):
+    # This runs in a background thread and needs its own DB session
+    from app.database import SessionLocal
+    from app.repositories.sql_repos import SqlMeetingRepository
+    
+    db = SessionLocal()
+    try:
+        repo = SqlMeetingRepository(db)
+        service = MeetingService(repo)
+        service.process_ai_summary(meeting_id, file_path)
+    finally:
+        db.close()
+
 @router.post("/upload", response_model=Meeting)
 async def upload_audio(
     background_tasks: BackgroundTasks, 
     file: UploadFile = File(...),
     title: Optional[str] = Form(None), 
+    duration: Optional[str] = Form(None),
     service: MeetingService = Depends(get_meeting_service)
 ):
     # 1. Start meeting in PENDING status
-    new_meeting = service.upload_audio_and_process(file.filename, title)
+    new_meeting = service.upload_audio_and_process(file.filename, title, duration)
     
     # 2. Save physical file to temp folder
     temp_dir = "temp"
@@ -41,7 +55,7 @@ async def upload_audio(
         shutil.copyfileobj(file.file, buffer)
     
     # 3. Add AI Audio + LLM transcribing to a queue/background task
-    background_tasks.add_task(service.process_ai_summary, new_meeting.id, file_path)
+    background_tasks.add_task(run_background_processing, new_meeting.id, file_path)
     
     return new_meeting
 

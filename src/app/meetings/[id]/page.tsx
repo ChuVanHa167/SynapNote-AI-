@@ -16,20 +16,25 @@ interface MeetingDetail {
   summary: string;
   transcript: string;
   audio_url?: string | null;
+  video_url?: string | null;
   decisions: string[];
   action_items: any[];
 }
+
+import { VideoPlayer } from '@/components/meetings/VideoPlayer';
+
+const API_BASE_URL = "http://localhost:8000";
 
 export default function MeetingDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
-  
+
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0); 
-  const [currentTime, setCurrentTime] = useState(0); 
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const [tasks, setTasks] = useState<any[]>([]);
 
   useEffect(() => {
@@ -41,7 +46,7 @@ export default function MeetingDetailPage() {
           setMeeting(data);
           setTasks(data.action_items || []);
         } else {
-           console.error("Meeting not found");
+          console.error("Meeting not found");
         }
       } catch (error) {
         console.error("Failed to fetch meeting detail:", error);
@@ -53,22 +58,22 @@ export default function MeetingDetailPage() {
   }, [id]);
 
   if (isLoading) {
-     return (
-        <div className="w-full h-screen flex items-center justify-center">
-           <Loader2 className="text-accent animate-spin" size={40} />
-        </div>
-     );
+    return (
+      <div className="w-full h-screen flex items-center justify-center">
+        <Loader2 className="text-accent animate-spin" size={40} />
+      </div>
+    );
   }
 
   if (!meeting) {
-     return (
-        <div className="w-full h-screen flex flex-col items-center justify-center gap-4">
-           <h2 className="text-xl font-medium">Không tìm thấy cuộc họp</h2>
-           <Link href="/meetings" className="text-accent hover:underline flex items-center gap-2">
-              <ArrowLeft size={16} /> Quay lại danh sách
-           </Link>
-        </div>
-     );
+    return (
+      <div className="w-full h-screen flex flex-col items-center justify-center gap-4">
+        <h2 className="text-xl font-medium">Không tìm thấy cuộc họp</h2>
+        <Link href="/meetings" className="text-accent hover:underline flex items-center gap-2">
+          <ArrowLeft size={16} /> Quay lại danh sách
+        </Link>
+      </div>
+    );
   }
 
   const formatTime = (seconds: number) => {
@@ -80,7 +85,7 @@ export default function MeetingDetailPage() {
   const handleTranscriptClick = (seconds: number) => {
     setCurrentTime(seconds);
     setIsPlaying(true);
-    setProgress((seconds / 150) * 100); 
+    setProgress((seconds / 150) * 100);
   };
 
   const toggleTask = (taskId: string) => {
@@ -93,29 +98,37 @@ export default function MeetingDetailPage() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto p-4 lg:p-8 h-[calc(100vh-6rem)] flex flex-col xl:flex-row gap-6">
-      
+
       {/* LEFT COLUMN: Media & Transcript (60%) */}
       <div className="w-full xl:w-[60%] flex flex-col gap-6 h-full min-h-[600px]">
         {/* Header Info */}
         <div className="animate-in fade-in slide-in-from-left-4 duration-700">
-           <div className="flex items-center gap-3 text-xs tracking-widest font-medium uppercase text-foreground/40 mb-3">
-              <span className="flex items-center gap-1.5 glass-panel px-3 py-1.5 rounded-full"><Clock size={12} /> {meeting.date}</span>
-              <span className="w-1 h-1 rounded-full bg-accent/50"></span>
-              <span>Thời lượng: {meeting.duration}</span>
-           </div>
-           <h1 className="text-3xl lg:text-4xl font-light tracking-tight text-foreground/90">{meeting.title}</h1>
+          <div className="flex items-center gap-3 text-xs tracking-widest font-medium uppercase text-foreground/40 mb-3">
+            <span className="flex items-center gap-1.5 glass-panel px-3 py-1.5 rounded-full"><Clock size={12} /> {meeting.date}</span>
+            <span className="w-1 h-1 rounded-full bg-accent/50"></span>
+            <span>Thời lượng: {meeting.duration}</span>
+          </div>
+          <h1 className="text-3xl lg:text-4xl font-light tracking-tight text-foreground/90">{meeting.title}</h1>
         </div>
 
-        <AudioPlayer 
-          isPlaying={isPlaying} 
-          onPlayPause={() => setIsPlaying(!isPlaying)}
-          progress={progress}
-          currentTime={formatTime(currentTime)}
-          duration={meeting.duration}
-          audioUrl={meeting.audio_url}
-        />
+        {meeting.video_url ? (
+          <VideoPlayer
+            videoUrl={`${API_BASE_URL}${meeting.video_url}`}
+            duration={meeting.duration}
+            title={meeting.title}
+          />
+        ) : (
+          <AudioPlayer
+            isPlaying={isPlaying}
+            onPlayPause={() => setIsPlaying(!isPlaying)}
+            progress={progress}
+            currentTime={formatTime(currentTime)}
+            duration={meeting.duration}
+            audioUrl={meeting.audio_url ? `${API_BASE_URL}${meeting.audio_url}` : null}
+          />
+        )}
 
-        <TranscriptView 
+        <TranscriptView
           transcript={transcriptLines as any}
           currentTimeSeconds={currentTime}
           onLineClick={handleTranscriptClick}
@@ -124,12 +137,12 @@ export default function MeetingDetailPage() {
 
       {/* RIGHT COLUMN: AI Intelligence Panel (40%) */}
       <div className="w-full xl:w-[40%] flex flex-col h-full animate-in fade-in slide-in-from-right-8 duration-700 delay-500 fill-mode-both">
-         <AIIntelligencePanel 
-            summary={meeting.summary || "Đang tạo tóm tắt..."}
-            decisions={meeting.decisions || []}
-            actionItems={tasks}
-            onToggleTask={toggleTask}
-         />
+        <AIIntelligencePanel
+          summary={meeting.summary || "Đang tạo tóm tắt..."}
+          decisions={meeting.decisions || []}
+          actionItems={tasks}
+          onToggleTask={toggleTask}
+        />
       </div>
 
     </div>

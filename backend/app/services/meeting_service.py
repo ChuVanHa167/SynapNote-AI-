@@ -17,14 +17,14 @@ class MeetingService:
     def get_meeting(self, meeting_id: str) -> Optional[Meeting]:
         return self.meeting_repo.get_by_id(meeting_id)
 
-    def upload_audio_and_process(self, filename: str,  title: str) -> Meeting:
+    def upload_audio_and_process(self, filename: str, title: str, duration: Optional[str] = None) -> Meeting:
         # Simulated start
         new_meeting = Meeting(
             id=str(uuid.uuid4()),
             title=title or filename,
             participants=1,
             date=datetime.now().strftime("%d Thg %m, %Y"),
-            duration="0m 0s",
+            duration=duration or "0m 0s",
             status="ĐANG XỬ LÝ",
             transcript=None
         )
@@ -76,7 +76,6 @@ class MeetingService:
         
         updates = {
             "status": "HOÀN THÀNH",
-            "duration": "10m 5s",
             "transcript": "Hello, let's start the meeting...",
             "summary": "This is an auto-generated AI summary after processing the media file.",
             "decisions": decision_objs,

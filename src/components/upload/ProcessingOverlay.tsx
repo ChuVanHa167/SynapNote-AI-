@@ -10,7 +10,7 @@ interface ProcessingOverlayProps {
 
 export function ProcessingOverlay({ isVisible, onFinished }: ProcessingOverlayProps) {
   const [step, setStep] = useState(0);
-  
+
   const steps = [
     { icon: FileVideo, text: "Đang tải video lên bộ nhớ tạm...", duration: 2000 },
     { icon: Loader2, text: "Đang trích xuất âm thanh chất lượng cao...", duration: 3000 },
@@ -26,13 +26,13 @@ export function ProcessingOverlay({ isVisible, onFinished }: ProcessingOverlayPr
 
     let currentStep = 0;
     const interval = setInterval(() => {
-        if (currentStep < steps.length - 1) {
-            currentStep++;
-            setStep(currentStep);
-        } else {
-            clearInterval(interval);
-            if (onFinished) onFinished();
-        }
+      if (currentStep < steps.length - 1) {
+        currentStep++;
+        setStep(currentStep);
+      } else {
+        clearInterval(interval);
+        if (onFinished) onFinished();
+      }
     }, 2500);
 
     return () => clearInterval(interval);
@@ -51,42 +51,41 @@ export function ProcessingOverlay({ isVisible, onFinished }: ProcessingOverlayPr
 
       <div className="relative glass-panel border border-white/10 p-12 lg:p-16 rounded-[3rem] max-w-lg w-full flex flex-col items-center shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-8 duration-700">
         <div className="w-24 h-24 rounded-3xl bg-card border border-white/5 flex items-center justify-center mb-10 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-tr from-accent/20 to-transparent"></div>
-            <CurrentIcon 
-                size={40} 
-                className={`text-accent relative z-10 ${step < 3 ? 'animate-pulse' : 'animate-bounce'}`} 
-                strokeWidth={1.5} 
-            />
-            {step < 3 && (
-                <div className="absolute inset-0 border-2 border-accent/30 rounded-3xl animate-ping opacity-20"></div>
-            )}
+          <div className="absolute inset-0 bg-gradient-to-tr from-accent/20 to-transparent"></div>
+          <CurrentIcon
+            size={40}
+            className={`text-accent relative z-10 ${step < 3 ? 'animate-pulse' : 'animate-bounce'}`}
+            strokeWidth={1.5}
+          />
+          {step < 3 && (
+            <div className="absolute inset-0 border-2 border-accent/30 rounded-3xl animate-ping opacity-20"></div>
+          )}
         </div>
 
         <div className="text-center space-y-4">
-            <h2 className="text-2xl font-medium tracking-tight text-foreground/90">
-                {steps[step].text}
-            </h2>
-            <div className="flex items-center justify-center gap-2">
-                {steps.map((_, i) => (
-                    <div 
-                        key={i} 
-                        className={`h-1 rounded-full transition-all duration-500 ${
-                            i === step ? 'w-8 bg-accent' : i < step ? 'w-4 bg-accent/30' : 'w-4 bg-white/5'
-                        }`}
-                    ></div>
-                ))}
-            </div>
-            <p className="text-sm text-foreground/40 font-medium tracking-wide uppercase mt-6">
-                Vui lòng không đóng trình duyệt
-            </p>
+          <h2 className="text-2xl font-medium tracking-tight text-foreground/90">
+            {steps[step].text}
+          </h2>
+          <div className="flex items-center justify-center gap-2">
+            {steps.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1 rounded-full transition-all duration-500 ${i === step ? 'w-8 bg-accent' : i < step ? 'w-4 bg-accent/30' : 'w-4 bg-white/5'
+                  }`}
+              ></div>
+            ))}
+          </div>
+          <p className="text-sm text-foreground/40 font-medium tracking-wide uppercase mt-6">
+            Vui lòng không đóng trình duyệt
+          </p>
         </div>
-        
+
         {/* Progress percent simulation */}
         <div className="mt-12 w-full bg-white/5 h-1 rounded-full overflow-hidden relative">
-            <div 
-                className="absolute top-0 left-0 h-full bg-accent transition-all duration-[2500ms] linear"
-                style={{ width: `${((step + 1) / steps.length) * 100}%` }}
-            ></div>
+          <div
+            className="absolute top-0 left-0 h-full bg-accent transition-all duration-[2500ms] linear"
+            style={{ width: `${((step + 1) / steps.length) * 100}%` }}
+          ></div>
         </div>
       </div>
     </div>

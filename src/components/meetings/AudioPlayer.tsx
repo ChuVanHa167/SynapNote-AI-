@@ -1,4 +1,4 @@
-import { Play, Pause, Rewind, FastForward, Volume2 } from 'lucide-react';
+import { Play, Pause, Rewind, FastForward, Volume2, VolumeX } from 'lucide-react';
 import { useRef, useEffect, useState } from 'react';
 
 interface AudioPlayerProps {
@@ -15,6 +15,8 @@ export function AudioPlayer({ isPlaying, onPlayPause, progress: initialProgress,
   const [progress, setProgress] = useState(initialProgress);
   const [currentTime, setCurrentTime] = useState(initialCurrentTime);
   const [isReady, setIsReady] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -48,6 +50,29 @@ export function AudioPlayer({ isPlaying, onPlayPause, progress: initialProgress,
     const x = e.clientX - rect.left;
     const percent = Math.max(0, Math.min(100, (x / rect.width) * 100));
     audio.currentTime = (percent / 100) * audio.duration;
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+      audioRef.current.muted = newVolume === 0;
+      setIsMuted(newVolume === 0);
+    }
+  };
+
+  const toggleMute = () => {
+    if (audioRef.current) {
+      const newMuted = !isMuted;
+      setIsMuted(newMuted);
+      audioRef.current.muted = newMuted;
+      if (newMuted) {
+        setVolume(0);
+      } else {
+        setVolume(audioRef.current.volume || 1);
+      }
+    }
   };
 
   return (
@@ -90,11 +115,19 @@ export function AudioPlayer({ isPlaying, onPlayPause, progress: initialProgress,
           </div>
         </div>
 
-        <div className="hidden md:flex items-center gap-4 text-foreground/80 glass-panel px-4 py-2 rounded-full">
-          <Volume2 size={16} />
-          <div className="w-20 h-1 bg-foreground/10 rounded-full overflow-hidden">
-            <div className="w-2/3 h-full bg-foreground/50 rounded-full"></div>
-          </div>
+        <div className="flex items-center gap-4 text-foreground/80 glass-panel px-4 py-2 rounded-full group/volume">
+          <button onClick={toggleMute} className="hover:text-white transition-colors">
+            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </button>
+          <input 
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={volume}
+            onChange={handleVolumeChange}
+            className="w-20 h-1 bg-foreground/10 rounded-full appearance-none cursor-pointer accent-accent"
+          />
         </div>
       </div>
 
