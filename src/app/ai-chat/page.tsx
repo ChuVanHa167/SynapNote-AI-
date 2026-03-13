@@ -1,38 +1,70 @@
 "use client";
 
-import { useState } from 'react';
-import { Send, Sparkles, Bot, Search, Briefcase, FileText, ChevronDown, Paperclip } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Send, Sparkles, Bot, Search, Briefcase, FileText, ChevronDown, Paperclip, Loader2 } from 'lucide-react';
 
 export default function AIChatPage() {
   const [messages, setMessages] = useState([
     { role: 'assistant', content: 'Xin chào, tôi là trợ lý AI của bạn. Tôi có thể giúp bạn tóm tắt cuộc họp, tìm kiếm thông tin trong các bản ghi âm cũ, và đưa ra các đề xuất chiến lược dựa trên dữ liệu hiện có.' }
   ]);
   const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   
-  // Data source selection
+  // Real Data Source Selection
+  const [meetings, setMeetings] = useState<any[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isLoadingMeetings, setIsLoadingMeetings] = useState(true);
 
-  const mockFiles = [
-    { id: '1', name: 'Đồng bộ chiến lược Marketing Q4' },
-    { id: '2', name: 'Product Sync: Tính năng mới' },
-    { id: '3', name: 'Pitching Khách hàng ABC' },
-  ];
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/meetings/');
+        if (response.ok) {
+          const data = await response.json();
+          setMeetings(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch meetings:", error);
+      } finally {
+        setIsLoadingMeetings(false);
+      }
+    };
+    fetchMeetings();
+  }, []);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isTyping) return;
     
-    setMessages([...messages, { role: 'user', content: input }]);
+    const userMessage = { role: 'user', content: input };
+    setMessages([...messages, userMessage]);
+    const currentInput = input;
     setInput('');
+    setIsTyping(true);
     
-    // Simulate AI response
-    setTimeout(() => {
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Đang tìm kiếm trong dữ liệu cuộc họp... Dựa trên "Đồng bộ chiến lược Marketing Q4", ngân sách đã được điều chỉnh tăng 20% cho performance marketing.' 
-      }]);
-    }, 1000);
+    try {
+      const response = await fetch('http://localhost:8000/chat/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: currentInput,
+          meeting_id: selectedFile
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Xin lỗi, có lỗi xảy ra khi kết nối với AI.' }]);
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Không thể kết nối tới máy chủ AI.' }]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const suggestions = [
@@ -70,10 +102,13 @@ export default function AIChatPage() {
                <div className="flex items-center gap-3 overflow-hidden">
                   <Paperclip size={16} className={selectedFile ? 'text-accent' : 'text-foreground/80'} />
                   <span className="truncate">
-                     {selectedFile ? mockFiles.find(f => f.id === selectedFile)?.name : "Chọn file cuộc họp..."}
+                     {isLoadingMeetings ? "Đang tải danh sách..." : 
+                        selectedFile ? meetings.find(f => f.id === selectedFile)?.title : "Chọn file cuộc họp..."}
                   </span>
                </div>
-               <ChevronDown size={14} className={`shrink-0 ml-2 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180 text-accent' : 'text-foreground/80'}`} />
+               {isLoadingMeetings ? <Loader2 size={14} className="animate-spin opacity-50" /> : 
+                  <ChevronDown size={14} className={`shrink-0 ml-2 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180 text-accent' : 'text-foreground/80'}`} />
+                }
             </button>
             
             {/* Dropdown Menu */}
@@ -91,7 +126,7 @@ export default function AIChatPage() {
                            Tất cả dữ liệu chung
                         </button>
                         <div className="h-px bg-border/50 mx-2 my-1"></div>
-                        {mockFiles.map(file => (
+                        {meetings.map(file => (
                            <button 
                               key={file.id}
                               onClick={() => { setSelectedFile(file.id); setIsDropdownOpen(false); }}
@@ -99,10 +134,13 @@ export default function AIChatPage() {
                                  selectedFile === file.id ? 'bg-accent/10 text-accent font-medium' : 'text-foreground/90 hover:bg-card hover:text-foreground'
                               }`}
                            >
-                              <span className="truncate">{file.name}</span>
-                              <span className="text-[10px] text-foreground/80 font-medium">File ghi âm & Trích xuất</span>
+                              <span className="truncate">{file.title}</span>
+                              <span className="text-[10px] text-foreground/80 font-medium">{file.date} • {file.duration}</span>
                            </button>
                         ))}
+                        {meetings.length === 0 && !isLoadingMeetings && (
+                          <div className="p-4 text-center text-xs text-foreground/40 italic">Không có cuộc họp nào</div>
+                        )}
                      </div>
                   </div>
                </>
@@ -121,16 +159,29 @@ export default function AIChatPage() {
                  <div className={`w-8 h-8 rounded-full flex shrink-0 items-center justify-center mt-1 ${msg.role === 'assistant' ? 'bg-accent/20 text-accent border border-accent/30' : 'bg-card border border-white/5'}`}>
                     {msg.role === 'assistant' ? <Sparkles size={14} /> : <div className="w-full h-full rounded-full overflow-hidden"><img src="https://api.dicebear.com/7.x/notionists/svg?seed=Alex&backgroundColor=transparent" alt="User" /></div>}
                  </div>
-                 <div className={`max-w-[80%] rounded-2xl p-5 text-sm leading-relaxed ${
-                    msg.role === 'user' 
-                      ? 'bg-accent/10 border border-accent/20 text-foreground/90 rounded-tr-none' 
-                      : 'bg-card/40 border border-white/5 text-foreground/80 rounded-tl-none font-medium shadow-sm'
-                 }`}>
-                    {msg.content}
-                 </div>
+                  <div className={`max-w-[80%] rounded-2xl p-5 text-sm leading-relaxed ${
+                     msg.role === 'user' 
+                       ? 'bg-accent text-accent-foreground rounded-tr-none shadow-md' 
+                       : 'bg-card/40 border border-white/5 text-foreground/80 rounded-tl-none font-medium shadow-sm'
+                  }`}>
+                     {msg.content}
+                  </div>
               </div>
             ))}
-         </div>
+            
+            {isTyping && (
+                <div className="flex gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                   <div className="w-8 h-8 rounded-full flex shrink-0 items-center justify-center mt-1 bg-accent/20 text-accent border border-accent/30">
+                      <Sparkles size={14} />
+                   </div>
+                   <div className="bg-card/40 border border-white/5 p-5 rounded-2xl rounded-tl-none flex gap-1 items-center shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent/40 animate-bounce"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent/40 animate-bounce [animation-delay:0.2s]"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent/40 animate-bounce [animation-delay:0.4s]"></span>
+                   </div>
+                </div>
+             )}
+          </div>
 
          {/* Suggested Questions */}
          <div className="px-6 lg:px-10 pb-4 flex gap-3 overflow-x-auto hide-scrollbar z-10">

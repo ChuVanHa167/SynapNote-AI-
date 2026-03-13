@@ -7,9 +7,11 @@ interface VideoPlayerProps {
   videoUrl: string;
   duration: string;
   title?: string;
+  onTimeUpdate?: (seconds: number) => void;
+  seekTo?: number;
 }
 
-export function VideoPlayer({ videoUrl, duration, title }: VideoPlayerProps) {
+export function VideoPlayer({ videoUrl, duration, title, onTimeUpdate, seekTo }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -31,23 +33,32 @@ export function VideoPlayer({ videoUrl, duration, title }: VideoPlayerProps) {
     setIsPlaying(!isPlaying);
   };
 
+  // Handle seekTo from parent
+  useEffect(() => {
+    if (videoRef.current && typeof seekTo === 'number') {
+      videoRef.current.currentTime = seekTo;
+    }
+  }, [seekTo]);
+
   const handleTimeUpdate = () => {
     const video = videoRef.current;
     if (!video) return;
-    
+
     const current = video.currentTime;
     const total = video.duration || 1;
     setProgress((current / total) * 100);
-    
+
     const m = Math.floor(current / 60).toString().padStart(2, '0');
     const s = Math.floor(current % 60).toString().padStart(2, '0');
     setCurrentTimeFormatted(`${m}:${s}`);
+
+    if (onTimeUpdate) onTimeUpdate(current);
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current;
     if (!video) return;
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percent = Math.max(0, Math.min(100, (x / rect.width) * 100));
@@ -95,7 +106,7 @@ export function VideoPlayer({ videoUrl, duration, title }: VideoPlayerProps) {
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
       className="glass-panel rounded-[2rem] overflow-hidden relative group aspect-video bg-black/40 border border-border transition-all duration-700 shadow-2xl"
@@ -112,14 +123,14 @@ export function VideoPlayer({ videoUrl, duration, title }: VideoPlayerProps) {
 
       {/* Overlay Controls */}
       <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-6 lg:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-        
+
         <div className="flex flex-col gap-6">
           {/* Progress Bar */}
-          <div 
+          <div
             onClick={handleSeek}
             className="w-full h-1.5 bg-white/10 rounded-full relative cursor-pointer group/progress overflow-hidden"
           >
-            <div 
+            <div
               className="absolute top-0 left-0 h-full bg-accent rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
             >
@@ -129,7 +140,7 @@ export function VideoPlayer({ videoUrl, duration, title }: VideoPlayerProps) {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-8">
-              <button 
+              <button
                 onClick={togglePlay}
                 className="w-12 h-12 rounded-full bg-accent text-accent-foreground flex items-center justify-center hover:scale-110 transition-transform"
               >
@@ -153,7 +164,7 @@ export function VideoPlayer({ videoUrl, duration, title }: VideoPlayerProps) {
                 <button onClick={toggleMute} className="text-white/60 hover:text-white transition-colors">
                   {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </button>
-                <input 
+                <input
                   type="range"
                   min="0"
                   max="1"
@@ -175,7 +186,7 @@ export function VideoPlayer({ videoUrl, duration, title }: VideoPlayerProps) {
       {!isPlaying && isReady && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-24 h-24 rounded-full bg-accent/20 backdrop-blur-sm border border-accent/30 flex items-center justify-center animate-pulse">
-             <Play size={40} className="text-accent ml-2" fill="currentColor" />
+            <Play size={40} className="text-accent ml-2" fill="currentColor" />
           </div>
         </div>
       )}

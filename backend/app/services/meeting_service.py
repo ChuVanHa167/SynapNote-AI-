@@ -60,21 +60,36 @@ class MeetingService:
                  # Ở đây ta không cần làm gì thêm vì URL đã được set ở router
                  pass
 
-            # 2. Mock background LLM completion
+            # 2. Mock transcript based on user's new requirements
+            transcript_text = """[00:00 - 00:05]
+[Chủ trì]: Chào mừng mọi người đã tham gia buổi họp ngày hôm nay.
+
+[00:06 - 00:15]
+[Chủ trì]: Hôm nay chúng ta sẽ xem xét tiến độ dự án SynapNote AI.
+
+[00:16 - 00:25]
+[Kỹ thuật]: Hiện tại phần upload file đã hoạt động ổn định với cơ chế robust-save mới.
+
+[00:26 - 00:40]
+[Sản phẩm]: Rất tốt. Tiếp theo chúng ta cần tập trung vào hoàn thiện phần giao diện bản dịch.
+
+[00:41 - 00:55]
+[AI]: Hệ thống sẽ tự động đồng bộ nội dung và thời gian để người dùng dễ dàng theo sát."""
+            
             from app.models.models import MeetingDecision
-            decision_objs = [MeetingDecision(content=d) for d in ["Mục tiêu dự án", "Phân công nhiệm vụ"]]
+            decision_objs = [MeetingDecision(content=d) for d in ["Tối ưu hóa upload", "Đồng bộ transcript", "Thêm tính năng Chat AI"]]
             
             updates = {
                 "status": "HOÀN THÀNH",
-                "transcript": "Chào mừng bạn đến với buổi họp. Đây là bản dịch mẫu cho nội dung của bạn.",
-                "summary": "AI đã phân tích xong. Nội dung chính thảo luận về việc tối ưu hóa quy trình làm việc và triển khai tính năng mới.",
+                "transcript": transcript_text,
+                "summary": "Buổi họp tập trung vào việc báo cáo tiến độ kỹ thuật và định hướng phát triển giao diện bản dịch đồng bộ.",
                 "decisions": decision_objs
             }
             if audio_url:
                 updates["audio_url"] = audio_url
 
             self.meeting_repo.update(meeting_id, updates)
-            print(f"[MeetingService] Đã cập nhật trạng thái HOÀN THÀNH cho {meeting_id}")
+            print(f"[MeetingService] Đã cập nhật trạng thái HOÀN THÀNH với bản dịch Text có Timestamp cho {meeting_id}")
 
         except Exception as e:
             print(f"[MeetingService] LỖI trong background task: {str(e)}")

@@ -37,6 +37,9 @@ export default function MeetingDetailPage() {
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [seekTo, setSeekTo] = useState<number | undefined>(undefined);
+  // v2.3 FIX - Robust Transcript Parser (Moved to top level to follow Hook rules)
+  const [parsedTranscript, setParsedTranscript] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -57,6 +60,44 @@ export default function MeetingDetailPage() {
     };
     if (id) fetchDetail();
   }, [id]);
+
+  useEffect(() => {
+    if (!meeting?.transcript) {
+      setParsedTranscript([]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(meeting.transcript);
+      if (Array.isArray(parsed)) {
+        setParsedTranscript(parsed);
+        return;
+      }
+    } catch (e) {}
+
+    const segments = meeting.transcript.split(/\n\s*\n/);
+    const result: any[] = [];
+    segments.forEach((segment, index) => {
+      const timeMatch = segment.match(/\[(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})\]/);
+      if (timeMatch) {
+        const startSec = parseInt(timeMatch[1]) * 60 + parseInt(timeMatch[2]);
+        let content = segment.replace(timeMatch[0], "").trim();
+        let speaker = "AI";
+        const speakerMatch = content.match(/^\[(.*?)\]:/);
+        if (speakerMatch) {
+          speaker = speakerMatch[1];
+          content = content.replace(speakerMatch[0], "").trim();
+        }
+        result.push({ id: String(index + 1), time: `${timeMatch[1]}:${timeMatch[2]}`, seconds: startSec, speaker, text: content });
+      }
+    });
+
+    if (result.length > 0) {
+      setParsedTranscript(result);
+    } else {
+      setParsedTranscript([{ id: '1', time: '00:00', seconds: 0, speaker: 'AI', text: meeting.transcript }]);
+    }
+  }, [meeting?.transcript]);
 
   /* v2.2 FIX - DIAGNOSTIC LOGS */
   useEffect(() => {
@@ -96,18 +137,18 @@ export default function MeetingDetailPage() {
   };
 
   const handleTranscriptClick = (seconds: number) => {
+    setSeekTo(seconds);
     setCurrentTime(seconds);
     setIsPlaying(true);
-    setProgress((seconds / 150) * 100);
+    // Reset seekTo after a short delay
+    setTimeout(() => setSeekTo(undefined), 100);
   };
 
   const toggleTask = (taskId: string) => {
     setTasks(tasks.map(t => t.id === taskId ? { ...t, status: t.status === 'completed' ? 'pending' : 'completed' } : t));
   };
 
-  // Convert flat transcript string to expected format if needed, 
-  // or handle as block text. Current TranscriptView seems to expect an array.
-  const transcriptLines = meeting.transcript ? [{ id: '1', time: '00:00', speaker: 'AI', text: meeting.transcript }] : [];
+  // Parser hooks moved to top level
 
   return (
     <div className="w-full max-w-[1600px] mx-auto p-4 lg:p-8 h-[calc(100vh-6rem)] flex flex-col xl:flex-row gap-6">
@@ -121,11 +162,10 @@ export default function MeetingDetailPage() {
             <span className="w-1 h-1 rounded-full bg-accent/50"></span>
             <span>Thời lượng: {meeting.duration}</span>
             <span className="w-1 h-1 rounded-full bg-accent/50"></span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] ${
-              meeting.status === 'HOÀN THÀNH' ? 'bg-emerald-500/10 text-emerald-500' : 
-              meeting.status === 'LỖI' ? 'bg-red-500/10 text-red-500' : 
-              'bg-blue-500/10 text-blue-400 animate-pulse'
-            }`}>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] ${meeting.status === 'HOÀN THÀNH' ? 'bg-emerald-500/10 text-emerald-500' :
+                meeting.status === 'LỖI' ? 'bg-red-500/10 text-red-500' :
+                  'bg-blue-500/10 text-blue-400 animate-pulse'
+              }`}>
               {meeting.status}
             </span>
           </div>
@@ -137,6 +177,8 @@ export default function MeetingDetailPage() {
             videoUrl={`${API_BASE_URL}${meeting.video_url}`}
             duration={meeting.duration}
             title={meeting.title}
+            onTimeUpdate={setCurrentTime}
+            seekTo={seekTo}
           />
         ) : (
           <AudioPlayer
@@ -146,13 +188,16 @@ export default function MeetingDetailPage() {
             currentTime={formatTime(currentTime)}
             duration={meeting.duration}
             audioUrl={meeting.audio_url ? `${API_BASE_URL}${meeting.audio_url}` : null}
+            onTimeUpdate={setCurrentTime}
+            seekTo={seekTo}
           />
         )}
 
         <TranscriptView
-          transcript={transcriptLines as any}
+          transcript={parsedTranscript}
           currentTimeSeconds={currentTime}
           onLineClick={handleTranscriptClick}
+          status={meeting.status}
         />
       </div>
 
@@ -164,6 +209,7 @@ export default function MeetingDetailPage() {
           decisions={meeting.decisions || []}
           actionItems={tasks}
           onToggleTask={toggleTask}
+          status={meeting.status}
         />
       </div>
 

@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Sparkles, MessageSquareText, LayoutList, Lightbulb, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
+import { Sparkles, MessageSquareText, LayoutList, Lightbulb, CheckCircle2, Circle, ChevronRight, FileText } from 'lucide-react';
 import { ActionItem } from '@/types/meeting';
 
 interface AIIntelligencePanelProps {
   meetingId: string;
   summary: string;
   decisions: string[];
-  actionItems: ActionItem[];
+  actionItems: any[];
   onToggleTask: (id: string) => void;
+  status?: string;
 }
 
 interface Message {
@@ -15,7 +16,7 @@ interface Message {
   content: string;
 }
 
-export function AIIntelligencePanel({ meetingId, summary, decisions, actionItems, onToggleTask }: AIIntelligencePanelProps) {
+export function AIIntelligencePanel({ meetingId, summary, decisions, actionItems, onToggleTask, status }: AIIntelligencePanelProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'chat'>('summary');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -81,52 +82,96 @@ export function AIIntelligencePanel({ meetingId, summary, decisions, actionItems
             <div className="space-y-10">
                {/* Executive Summary */}
                <section>
-                  <h4 className="text-xs font-semibold tracking-widest uppercase text-foreground/80 mb-4 flex items-center gap-2">
-                     <LayoutList size={14} className="text-accent" /> Tóm tắt điều hành
-                  </h4>
-                  <p className="text-sm text-foreground/90 leading-relaxed font-medium">
-                     {summary}
-                  </p>
-               </section>
+                  <div className="space-y-4">
+                <div className="flex items-center gap-3 text-foreground/50 text-xs font-semibold tracking-widest uppercase">
+                  <FileText size={14} className="text-accent" />
+                  Tóm tắt điều hành
+                </div>
+                {status === 'LỖI' ? (
+                  <p className="text-red-400/80 text-sm italic">Không thể tạo tóm tắt do lỗi hệ thống.</p>
+                ) : status === 'HOÀN THÀNH' ? (
+                  <p className="text-foreground/80 leading-relaxed text-sm font-medium">{summary}</p>
+                ) : (
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-4 bg-white/5 rounded w-full"></div>
+                    <div className="h-4 bg-white/5 rounded w-5/6"></div>
+                  </div>
+                )}
+              </div>
+</section>
 
                {/* Key Decisions */}
                <section>
-                  <h4 className="text-xs font-semibold tracking-widest uppercase text-foreground/80 mb-4 flex items-center gap-2">
-                     <Lightbulb size={14} className="text-amber-500" /> Quyết định chính
-                  </h4>
+                  <div className="space-y-4">
+                <div className="flex items-center gap-3 text-foreground/50 text-xs font-semibold tracking-widest uppercase">
+                  <Lightbulb size={14} className="text-accent" />
+                  Quyết định chính
+                </div>
+                {status === 'LỖI' ? (
+                   <p className="text-red-400/80 text-sm italic">Không thể trích xuất quyết định.</p>
+                ) : status === 'HOÀN THÀNH' ? (
                   <ul className="space-y-3">
-                     {decisions.map((dec, i) => (
-                        <li key={i} className="flex gap-3 text-sm text-foreground/90 font-medium items-start bg-card/30 p-3 rounded-xl border border-white/5">
-                           <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-500 shrink-0"></span>
-                           <span>{dec}</span>
-                        </li>
-                     ))}
+                    {decisions.map((decision, index) => (
+                      <li key={index} className="flex gap-3 text-sm font-medium text-foreground/70 group/item">
+                        <span className="w-1.5 h-1.5 rounded-full bg-accent/40 mt-1.5 group-hover/item:bg-accent transition-colors"></span>
+                        {decision}
+                      </li>
+                    ))}
                   </ul>
-               </section>
+                ) : (
+                  <div className="space-y-3 animate-pulse">
+                    <div className="flex gap-3 items-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white/5"></div>
+                      <div className="h-3 bg-white/5 rounded w-1/2"></div>
+                    </div>
+                    <div className="flex gap-3 items-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white/5"></div>
+                      <div className="h-3 bg-white/5 rounded w-2/3"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+</section>
 
                {/* Action Items */}
                <section>
-                  <h4 className="text-xs font-semibold tracking-widest uppercase text-foreground/80 mb-4 flex items-center gap-2">
-                     <CheckCircle2 size={14} className="text-emerald-500" /> Công việc cần làm
-                  </h4>
+                  <div className="space-y-4">
+                <div className="flex items-center gap-3 text-foreground/50 text-xs font-semibold tracking-widest uppercase">
+                  <CheckCircle2 size={14} className="text-accent" />
+                  Công việc cần làm
+                </div>
+                {status === 'LỖI' ? (
+                   <p className="text-red-400/80 text-sm italic">Không thể xác định công việc.</p>
+                ) : status === 'HOÀN THÀNH' ? (
                   <div className="space-y-2">
-                     {actionItems.map(task => (
-                        <div key={task.id} className="group flex items-center gap-4 p-3.5 rounded-xl hover:bg-card/40 border border-transparent hover:border-white/5 transition-all">
-                           <button onClick={() => onToggleTask(task.id)} className="text-foreground/20 hover:text-emerald-500 transition-colors">
-                              {task.status === 'completed' ? <CheckCircle2 size={18} className="text-emerald-500" /> : <Circle size={18} />}
-                           </button>
-                           <div className="flex-1 flex items-center justify-between">
-                              <p className={`text-sm ${task.status === 'completed' ? 'line-through text-foreground/30' : 'text-foreground/80 font-medium'}`}>
-                                 {task.task}
-                              </p>
-                              <div className="flex items-center gap-3">
-                                 <span className="text-[10px] uppercase tracking-wider bg-accent/10 text-accent px-2 py-1 rounded-md">{task.assignee}</span>
-                              </div>
-                           </div>
+                    {actionItems.map((item) => (
+                      <div 
+                        key={item.id}
+                        onClick={() => onToggleTask(item.id)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          item.status === 'completed' 
+                            ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500/60' 
+                            : 'bg-white/5 border-transparent hover:border-white/10 text-foreground/70'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                          item.status === 'completed' ? 'bg-emerald-500 border-emerald-500' : 'border-white/10'
+                        }`}>
+                          {item.status === 'completed' && <CheckCircle2 size={12} className="text-white" />}
                         </div>
-                     ))}
+                        <span className="text-sm font-medium">{item.content}</span>
+                      </div>
+                    ))}
                   </div>
-               </section>
+                ) : (
+                  <div className="space-y-2 animate-pulse">
+                    {[1, 2].map(i => (
+                      <div key={i} className="h-10 bg-white/5 rounded-xl border border-transparent"></div>
+                    ))}
+                  </div>
+                )}
+              </div>
+</section>
             </div>
          ) : (
             <div className="h-full flex flex-col">
