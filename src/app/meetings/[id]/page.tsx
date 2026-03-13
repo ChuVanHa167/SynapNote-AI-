@@ -138,6 +138,7 @@ export default function MeetingDetailPage() {
       {/* RIGHT COLUMN: AI Intelligence Panel (40%) */}
       <div className="w-full xl:w-[40%] flex flex-col h-full animate-in fade-in slide-in-from-right-8 duration-700 delay-500 fill-mode-both">
         <AIIntelligencePanel
+          meetingId={meeting.id}
           summary={meeting.summary || "Đang tạo tóm tắt..."}
           decisions={meeting.decisions || []}
           actionItems={tasks}

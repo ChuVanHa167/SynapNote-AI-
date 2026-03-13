@@ -65,3 +65,23 @@ async def delete_meeting(meeting_id: str, service: MeetingService = Depends(get_
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Meeting not found")
     return {"message": "Meeting deleted successfully"}
+    actual_size = os.path.getsize(persistent_path)
+    print(f"[Upload] File đã lưu tại {persistent_path}. Kích thước: {actual_size} bytes")
+
+    # 4. Update DB with URL immediately so it's playable
+    if is_video:
+        service.meeting_repo.update(new_meeting.id, {"video_url": public_url})
+    else:
+        service.meeting_repo.update(new_meeting.id, {"audio_url": public_url})
+
+    # 5. Start background AI processing (using the persistent path)
+    background_tasks.add_task(run_background_processing, new_meeting.id, persistent_path)
+    
+    return service.get_meeting(new_meeting.id)
+
+@router.delete("/{meeting_id}")
+async def delete_meeting(meeting_id: str, service: MeetingService = Depends(get_meeting_service)):
+    if not service.delete_meeting(meeting_id):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    return {"message": "Meeting deleted successfully"}

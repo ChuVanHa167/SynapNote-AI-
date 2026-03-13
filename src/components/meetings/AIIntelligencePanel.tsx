@@ -3,14 +3,58 @@ import { Sparkles, MessageSquareText, LayoutList, Lightbulb, CheckCircle2, Circl
 import { ActionItem } from '@/types/meeting';
 
 interface AIIntelligencePanelProps {
+  meetingId: string;
   summary: string;
   decisions: string[];
   actionItems: ActionItem[];
   onToggleTask: (id: string) => void;
 }
 
-export function AIIntelligencePanel({ summary, decisions, actionItems, onToggleTask }: AIIntelligencePanelProps) {
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export function AIIntelligencePanel({ meetingId, summary, decisions, actionItems, onToggleTask }: AIIntelligencePanelProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'chat'>('summary');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+
+  const handleSendMessage = async () => {
+    if (!inputText.trim() || isTyping) return;
+
+    const userMsg: Message = { role: 'user', content: inputText };
+    setMessages(prev => [...prev, userMsg]);
+    const currentInput = inputText;
+    setInputText('');
+    setIsTyping(true);
+
+    try {
+      const response = await fetch('http://localhost:8000/chat/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: currentInput,
+          meeting_id: meetingId
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const aiMsg: Message = { role: 'assistant', content: data.content };
+        setMessages(prev => [...prev, aiMsg]);
+      } else {
+        console.error("Chat API error");
+      }
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
   return (
     <div className="glass-panel rounded-[2rem] flex-1 flex flex-col overflow-hidden border border-border">
@@ -86,14 +130,55 @@ export function AIIntelligencePanel({ summary, decisions, actionItems, onToggleT
             </div>
          ) : (
             <div className="h-full flex flex-col">
-               <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50">
-                  <Sparkles size={32} className="text-accent mb-4" strokeWidth={1} />
-                  <p className="text-sm font-medium">Hãy hỏi bất kỳ điều gì về cuộc họp này.</p>
-                  <p className="text-xs mt-2">&quot;Quyết định về ngân sách là gì?&quot;</p>
+               <div className="flex-1 overflow-y-auto mb-4 space-y-4 custom-scrollbar lg:pr-2">
+                  {messages.length === 0 ? (
+                     <div className="h-full flex flex-col items-center justify-center text-center opacity-50 py-10">
+                        <Sparkles size={32} className="text-accent mb-4" strokeWidth={1} />
+                        <p className="text-sm font-medium">Hãy hỏi bất kỳ điều gì về cuộc họp này.</p>
+                        <p className="text-xs mt-2">&quot;Quyết định về ngân sách là gì?&quot;</p>
+                     </div>
+                  ) : (
+                     <div className="space-y-4">
+                        {messages.map((msg, i) => (
+                           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${
+                                 msg.role === 'user' 
+                                 ? 'bg-accent text-accent-foreground rounded-tr-none shadow-sm' 
+                                 : 'bg-card border border-border text-foreground/90 rounded-tl-none shadow-sm'
+                              }`}>
+                                 {msg.content}
+                              </div>
+                           </div>
+                        ))}
+                        {isTyping && (
+                           <div className="flex justify-start">
+                              <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
+                                 <div className="flex gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-accent/40 animate-bounce"></span>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-accent/40 animate-bounce [animation-delay:0.2s]"></span>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-accent/40 animate-bounce [animation-delay:0.4s]"></span>
+                                 </div>
+                              </div>
+                           </div>
+                        )}
+                     </div>
+                  )}
                </div>
-               <div className="mt-auto relative">
-                  <input type="text" placeholder="Nhắn tin với AI..." className="w-full bg-card border border-border focus:border-accent/50 rounded-2xl py-4 pl-4 pr-12 text-sm focus:outline-none transition-all shadow-inner" />
-                  <button className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-foreground/5 hover:bg-accent/20 hover:text-accent rounded-xl flex items-center justify-center transition-colors">
+               
+               <div className="mt-auto relative pt-4 border-t border-border/30">
+                  <input 
+                     type="text" 
+                     value={inputText}
+                     onChange={(e) => setInputText(e.target.value)}
+                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                     placeholder="Nhắn tin với AI..." 
+                     className="w-full bg-card border border-border focus:border-accent/50 rounded-2xl py-4 pl-4 pr-12 text-sm focus:outline-none transition-all shadow-inner" 
+                  />
+                  <button 
+                     onClick={handleSendMessage}
+                     disabled={isTyping}
+                     className="absolute right-2 top-[calc(50%+8px)] -translate-y-1/2 w-8 h-8 bg-foreground/5 hover:bg-accent/20 hover:text-accent disabled:opacity-30 rounded-xl flex items-center justify-center transition-colors"
+                  >
                      <ChevronRight size={16} />
                   </button>
                </div>
