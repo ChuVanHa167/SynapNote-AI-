@@ -10,6 +10,10 @@ CREATE TABLE `users` (
   `email` VARCHAR(255) NOT NULL,
   `display_name` VARCHAR(100) NOT NULL,
   `title` VARCHAR(100) DEFAULT NULL,
+  `avatar_url` VARCHAR(500) DEFAULT NULL,
+  `email_summaries` TINYINT(1) DEFAULT 1,
+  `action_item_alerts` TINYINT(1) DEFAULT 1,
+  `product_updates` TINYINT(1) DEFAULT 0,
   `hashed_password` VARCHAR(255) NOT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -31,6 +35,8 @@ CREATE TABLE `meetings` (
   -- Kết quả AI sinh ra
   `summary` TEXT DEFAULT NULL,
   `transcript` LONGTEXT DEFAULT NULL,
+  `audio_url` VARCHAR(500) DEFAULT NULL,
+  `video_url` VARCHAR(500) DEFAULT NULL,
   
   -- Foreign key link tới người tải lên (tùy chọn)
   `user_id` VARCHAR(36) DEFAULT NULL,

@@ -31,7 +31,9 @@ class SqlMeetingRepository(IMeetingRepository):
             duration=meeting.duration,
             status=meeting.status,
             summary=meeting.summary,
-            transcript=meeting.transcript
+            transcript=meeting.transcript,
+            audio_url=meeting.audio_url,
+            video_url=meeting.video_url
         )
         self.db.add(db_meeting)
         self.db.commit()
@@ -41,10 +43,15 @@ class SqlMeetingRepository(IMeetingRepository):
     def update(self, meeting_id: str, data: dict) -> schemas.Meeting:
         db_meeting = self.db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
         if db_meeting:
+            print(f"[Repository] Updating meeting {meeting_id}. Keys: {list(data.keys())}")
             for key, value in data.items():
                 if hasattr(db_meeting, key):
+                    print(f"[Repository] Setting {key} = {value}")
                     setattr(db_meeting, key, value)
+                else:
+                    print(f"[Repository] WARNING: Attribute {key} not found on Meeting model")
             self.db.commit()
+            print(f"[Repository] Commit finished for {meeting_id}")
             self.db.refresh(db_meeting)
             return self._to_schema(db_meeting)
         return None

@@ -27,8 +27,10 @@ app.add_middleware(
 from fastapi.staticfiles import StaticFiles
 import os
 
-# Ensure uploads directory exists
+# Ensure uploads directory structure exists
 os.makedirs("uploads", exist_ok=True)
+os.makedirs("uploads/audio", exist_ok=True)
+os.makedirs("uploads/videos", exist_ok=True)
 
 # Include Routers
 app.include_router(auth.router)

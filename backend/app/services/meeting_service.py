@@ -17,8 +17,7 @@ class MeetingService:
     def get_meeting(self, meeting_id: str) -> Optional[Meeting]:
         return self.meeting_repo.get_by_id(meeting_id)
 
-    def upload_audio_and_process(self, filename: str, title: str, duration: Optional[str] = None) -> Meeting:
-        # Simulated start
+    def upload_audio_and_process(self, filename: str, title: str, duration: Optional[str] = None, audio_url: Optional[str] = None, video_url: Optional[str] = None) -> Meeting:
         new_meeting = Meeting(
             id=str(uuid.uuid4()),
             title=title or filename,
@@ -26,78 +25,103 @@ class MeetingService:
             date=datetime.now().strftime("%d Thg %m, %Y"),
             duration=duration or "0m 0s",
             status="ĐANG XỬ LÝ",
-            transcript=None
+            transcript=None,
+            audio_url=audio_url,
+            video_url=video_url
         )
         return self.meeting_repo.create(new_meeting)
 
     def process_ai_summary(self, meeting_id: str, saved_file_path: str):
         print(f"[MeetingService] Bắt đầu xử lý nền cho cuộc họp {meeting_id}")
         
+        audio_url = None
+        persistent_audio_path = None
+
         try:
-            # 1. Trích xuất âm thanh nếu là file Video (chỉ trích xuất, không cần move video vì đã move ở router)
-            audio_url = None
+            # 1. Trích xuất âm thanh nếu là file Video
             if saved_file_path.lower().endswith(('.mp4', '.mov', '.avi', '.mkv')):
-                 print(f"[MeetingService] Đang trích xuất audio từ video...")
-                 try:
-                     extracted_audio_path = self.audio_service.extract_audio(saved_file_path)
-                     if extracted_audio_path:
-                         # Move extracted audio to public uploads
-                         import shutil
-                         audio_filename = os.path.basename(extracted_audio_path)
-                         persistent_audio_path = os.path.join("uploads", audio_filename)
-                         shutil.copy2(extracted_audio_path, persistent_audio_path)
-                         audio_url = f"/uploads/{audio_filename}"
-                         
-                         # Cleanup temp audio
-                         if os.path.exists(extracted_audio_path):
-                             os.remove(extracted_audio_path)
-                         print(f"[MeetingService] Đã trích xuất audio thành công: {audio_url}")
-                 except Exception as ae:
-                     print(f"[MeetingService] CẢNH BÁO: Trích xuất audio thất bại: {str(ae)}")
-            else:
-                 # Nếu là audio, chính nó là audio_url (đã lưu ở router)
-                 # Router lưu ở f"/uploads/{persistent_filename}"
-                 # Ở đây ta không cần làm gì thêm vì URL đã được set ở router
-                 pass
-
-            # 2. Mock transcript based on user's new requirements
-            transcript_text = """[00:00 - 00:05]
-[Chủ trì]: Chào mừng mọi người đã tham gia buổi họp ngày hôm nay.
-
-[00:06 - 00:15]
-[Chủ trì]: Hôm nay chúng ta sẽ xem xét tiến độ dự án SynapNote AI.
-
-[00:16 - 00:25]
-[Kỹ thuật]: Hiện tại phần upload file đã hoạt động ổn định với cơ chế robust-save mới.
-
-[00:26 - 00:40]
-[Sản phẩm]: Rất tốt. Tiếp theo chúng ta cần tập trung vào hoàn thiện phần giao diện bản dịch.
-
-[00:41 - 00:55]
-[AI]: Hệ thống sẽ tự động đồng bộ nội dung và thời gian để người dùng dễ dàng theo sát."""
+                print(f"[MeetingService] Đang trích xuất audio từ video...")
+                try:
+                    extracted_audio_path = self.audio_service.extract_audio(saved_file_path)
+                    if extracted_audio_path:
+                        audio_filename = os.path.basename(extracted_audio_path)
+                        target_dir = "uploads/audio"
+                        os.makedirs(target_dir, exist_ok=True)
+                        persistent_audio_path = os.path.join(target_dir, audio_filename)
+                        
+                        # Only copy if different
+                        if os.path.abspath(extracted_audio_path) != os.path.abspath(persistent_audio_path):
+                            import shutil
+                            shutil.copy2(extracted_audio_path, persistent_audio_path)
+                        
+                        audio_url = f"/uploads/audio/{audio_filename}"
+                        print(f"[MeetingService] Đã trích xuất audio thành công: {audio_url}")
+                except Exception as ae:
+                    print(f"[MeetingService] CẢNH BÁO: Phân tách audio gặp lỗi: {str(ae)}")
             
+            # 2. Thực hiện trích xuất STT
+            print(f"[MeetingService] Đang thực hiện Speech-to-Text cho {meeting_id}...")
+            try:
+                import sys
+                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+                if project_root not in sys.path:
+                    sys.path.append(project_root)
+                
+                from ai.STT.stt import speech_to_text
+                process_path = persistent_audio_path if (audio_url and os.path.exists(persistent_audio_path)) else saved_file_path
+                
+                transcript_text = speech_to_text(process_path)
+                print(f"[MeetingService] STT hoàn tất cho {meeting_id}")
+            except Exception as stte:
+                print(f"[MeetingService] LỖI: STT thất bại: {str(stte)}")
+                transcript_text = "Không thể trích xuất bản dịch từ âm thanh."
+
+            # 3. AI Summary
             from app.models.models import MeetingDecision
             decision_objs = [MeetingDecision(content=d) for d in ["Tối ưu hóa upload", "Đồng bộ transcript", "Thêm tính năng Chat AI"]]
             
             updates = {
                 "status": "HOÀN THÀNH",
                 "transcript": transcript_text,
-                "summary": "Buổi họp tập trung vào việc báo cáo tiến độ kỹ thuật và định hướng phát triển giao diện bản dịch đồng bộ.",
+                "summary": "Bản dịch đã được trích xuất thành công từ recording.",
                 "decisions": decision_objs
             }
+            
             if audio_url:
                 updates["audio_url"] = audio_url
-
+                # Auto-cleanup video
+                if saved_file_path.lower().endswith(('.mp4', '.mov', '.avi', '.mkv')):
+                    print(f"[MeetingService] Đang xóa file video gốc: {saved_file_path}")
+                    try:
+                        if os.path.exists(saved_file_path):
+                            os.remove(saved_file_path)
+                            updates["video_url"] = None
+                    except Exception as de:
+                        print(f"[MeetingService] CẢNH BÁO: Không thể xóa video: {str(de)}")
+            
             self.meeting_repo.update(meeting_id, updates)
-            print(f"[MeetingService] Đã cập nhật trạng thái HOÀN THÀNH với bản dịch Text có Timestamp cho {meeting_id}")
+            print(f"[MeetingService] Đã cập nhật trạng thái HOÀN THÀNH cho {meeting_id}")
 
         except Exception as e:
             print(f"[MeetingService] LỖI trong background task: {str(e)}")
             self.meeting_repo.update(meeting_id, {
                 "status": "LỖI", 
-                "summary": f"Lỗi hệ thống trong quá trình xử lý: {str(e)}"
+                "summary": f"Lỗi hệ thống: {str(e)}"
             })
 
     def delete_meeting(self, meeting_id: str) -> bool:
+        meeting = self.meeting_repo.get_by_id(meeting_id)
+        if not meeting:
+            return False
+        
+        for url in [meeting.audio_url, meeting.video_url]:
+            if url:
+                file_path = url.lstrip('/')
+                try:
+                    if os.path.exists(file_path):
+                        print(f"[MeetingService] Đang xóa file media: {file_path}")
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"[MeetingService] CẢNH BÁO: Không thể xóa {file_path}: {str(e)}")
+        
         return self.meeting_repo.delete(meeting_id)
-

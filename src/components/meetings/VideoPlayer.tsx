@@ -23,12 +23,27 @@ export function VideoPlayer({ videoUrl, duration, title, onTimeUpdate, seekTo }:
   const [showControls, setShowControls] = useState(true);
   let controlsTimeout: NodeJS.Timeout;
 
+  const playPromiseRef = useRef<Promise<void> | null>(null);
+
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (isPlaying) {
-      videoRef.current.pause();
+      if (playPromiseRef.current !== null) {
+        playPromiseRef.current.then(() => {
+          videoRef.current?.pause();
+        }).catch(() => {
+          videoRef.current?.pause();
+        });
+      } else {
+        videoRef.current.pause();
+      }
     } else {
-      videoRef.current.play().catch(err => console.error("Video playback failed:", err));
+      playPromiseRef.current = videoRef.current.play();
+      playPromiseRef.current.catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error("Video playback failed:", err);
+        }
+      });
     }
     setIsPlaying(!isPlaying);
   };

@@ -48,29 +48,21 @@ async def upload_audio(
     
     # 2. Determine paths early (Persistent storage)
     is_video = file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))
-    persistent_dir = "uploads/videos" if is_video else "uploads"
+    persistent_dir = "uploads/videos" if is_video else "uploads/audio"
     os.makedirs(persistent_dir, exist_ok=True)
     
     persistent_filename = f"raw_{new_meeting.id}_{file.filename}"
     persistent_path = os.path.join(persistent_dir, persistent_filename)
     public_url = f"/{persistent_dir}/{persistent_filename}"
     
-    # 3. Save physical file directly to persistent storage
-    print(f"[Upload] Đang lưu file: {file.filename}")
+    # 3. Save physical file directly to persistent storage (Optimized streaming)
+    print(f"[Upload] Đang lưu file (Streaming): {file.filename}")
     try:
-        await file.seek(0)
-        content = await file.read()
-        content_length = len(content)
-        
         with open(persistent_path, "wb") as buffer:
-            buffer.write(content)
+            shutil.copyfileobj(file.file, buffer)
         
-        # Check saved file size
         actual_size = os.path.getsize(persistent_path)
-        print(f"[Upload] Đã lưu xong. Buffer: {content_length} bytes, Disk: {actual_size} bytes")
-        
-        if actual_size == 0 or actual_size != content_length:
-             print(f"[Upload] CẢNH BÁO: Kích thước file không khớp hoặc bằng 0!")
+        print(f"[Upload] Đã lưu xong (Streaming). Kích thước: {actual_size} bytes")
              
     except Exception as e:
         print(f"[Upload] LỖI khi lưu file: {str(e)}")
@@ -92,3 +84,32 @@ async def delete_meeting(meeting_id: str, service: MeetingService = Depends(get_
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Meeting not found")
     return {"message": "Meeting deleted successfully"}
+
+@router.post("/{meeting_id}/reprocess", response_model=Meeting)
+async def reprocess_meeting(
+    meeting_id: str,
+    background_tasks: BackgroundTasks,
+    service: MeetingService = Depends(get_meeting_service)
+):
+    # 1. Check if meeting exists
+    meeting = service.get_meeting(meeting_id)
+    if not meeting:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # 2. Update status to PENDING/PROCESSING
+    service.meeting_repo.update(meeting_id, {"status": "ĐANG XỬ LÝ"})
+    
+    # 3. Identify path for processing
+    # We prefer extracted audio if it exists, otherwise video
+    # Note: Logic in process_ai_summary handles this, so we just need a valid path
+    import os
+    is_video = meeting.video_url is not None
+    persistent_dir = "uploads/videos" if is_video else "uploads/audio"
+    filename = os.path.basename(meeting.video_url or meeting.audio_url)
+    persistent_path = os.path.join(persistent_dir, filename)
+    
+    # 4. Trigger background task
+    background_tasks.add_task(run_background_processing, meeting_id, persistent_path)
+    
+    return service.get_meeting(meeting_id)

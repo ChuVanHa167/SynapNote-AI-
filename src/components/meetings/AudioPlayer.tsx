@@ -20,14 +20,30 @@ export function AudioPlayer({ isPlaying, onPlayPause, progress: initialProgress,
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
 
+  const playPromiseRef = useRef<Promise<void> | null>(null);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     if (isPlaying) {
-      audio.play().catch(err => console.error("Playback failed:", err));
+      playPromiseRef.current = audio.play();
+      playPromiseRef.current.catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error("Playback failed:", err);
+        }
+      });
     } else {
-      audio.pause();
+      if (playPromiseRef.current !== null) {
+        playPromiseRef.current.then(() => {
+          audio.pause();
+        }).catch(() => {
+          // If play failed, we still want to make sure it's paused
+          audio.pause();
+        });
+      } else {
+        audio.pause();
+      }
     }
   }, [isPlaying]);
 

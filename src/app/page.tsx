@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { FileVideo, Clock, Sparkles, MoveUpRight, MoreHorizontal, ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useUser } from '@/context/UserContext';
+import { DeleteModal } from '@/components/meetings/DeleteModal';
 
 interface Meeting {
    id: string;
@@ -19,6 +20,8 @@ export default function Dashboard() {
    const [meetings, setMeetings] = useState<Meeting[]>([]);
    const [isLoading, setIsLoading] = useState(true);
    const [activeMenu, setActiveMenu] = useState<string | null>(null);
+   const [meetingToDelete, setMeetingToDelete] = useState<string | null>(null);
+   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
    useEffect(() => {
       const fetchMeetings = async () => {
@@ -37,29 +40,35 @@ export default function Dashboard() {
       fetchMeetings();
    }, []);
 
-   const handleDelete = async (id: string) => {
-      if (!confirm("Bạn có chắc chắn muốn xóa cuộc họp này không?")) return;
+   const handleDelete = async () => {
+      if (!meetingToDelete) return;
       
       try {
-         const response = await fetch(`http://localhost:8000/meetings/${id}`, {
+         const response = await fetch(`http://localhost:8000/meetings/${meetingToDelete}`, {
             method: 'DELETE',
          });
          if (response.ok) {
-            setMeetings(prev => prev.filter(m => m.id !== id));
+            setMeetings(prev => prev.filter(m => m.id !== meetingToDelete));
             setActiveMenu(null);
+            setMeetingToDelete(null);
          } else {
-            alert("Xóa cuộc họp thất bại.");
+            throw new Error("Xóa cuộc họp thất bại.");
          }
       } catch (error) {
          console.error("Error deleting meeting:", error);
+         throw error;
       }
    };
 
    // Compute stats
    const totalMeetings = meetings.length;
 
-   const pendingMeetings = meetings.filter(
-      (m) => m.status === 'PENDING' || m.status === 'ĐANG XỬ LÝ'
+   const toReviewCount = meetings.filter(
+      (m) => m.status === 'HOÀN THÀNH'
+   ).length;
+
+   const processingCount = meetings.filter(
+      (m) => m.status === 'ĐANG XỬ LÝ' || m.status === 'PENDING'
    ).length;
 
    const totalHoursSaved = meetings
@@ -81,8 +90,8 @@ export default function Dashboard() {
    const stats = [
       { label: "Tổng cuộc họp", value: totalMeetings.toString(), trend: "+12%", isUp: true, icon: FileVideo, color: "text-accent" },
       { label: "Giờ tiết kiệm", value: `${totalHoursSaved}h`, trend: "+4.1h", isUp: true, icon: Clock, color: "text-emerald-400" },
-      { label: "Phân tích AI", value: "1,492", trend: "+145", isUp: true, icon: Sparkles, color: "text-purple-400" },
-      { label: "Chờ xử lý", value: pendingMeetings.toString(), trend: "Cần xem", isUp: false, icon: Clock, color: "text-amber-400" }
+      { label: "Đang xử lý", value: processingCount.toString(), trend: "AI", isUp: true, icon: Sparkles, color: "text-purple-400" },
+      { label: "Chờ xem lại", value: toReviewCount.toString(), trend: "Cần xem", isUp: false, icon: Clock, color: "text-amber-400" }
    ];
 
    const recentMeetings = [...meetings].reverse().slice(0, 3);
@@ -112,7 +121,7 @@ export default function Dashboard() {
                       {user?.display_name || "Alexander"}
                    </span>
                 </h1>
-               <p className="text-foreground/80 text-sm tracking-wide">Bạn có {pendingMeetings} bản tóm tắt đang chờ xem lại hôm nay.</p>
+               <p className="text-foreground/80 text-sm tracking-wide">Bạn có {toReviewCount} bản tóm tắt đã sẵn sàng để xem lại hôm nay.</p>
             </div>
             <Link href="/upload" className="glass-panel px-6 py-3 rounded-xl text-sm font-medium hover:border-accent/50 hover:text-accent transition-all flex items-center gap-2 group border border-border">
                <span className="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
@@ -196,7 +205,7 @@ export default function Dashboard() {
                                      {activeMenu === item.id && (
                                         <div className="absolute right-8 top-12 w-48 glass-panel rounded-xl border border-border shadow-2xl z-50 py-2 animate-in fade-in zoom-in-95 duration-200 text-left">
                                            <button 
-                                              onClick={() => handleDelete(item.id)}
+                                              onClick={() => setMeetingToDelete(item.id)}
                                               className="w-full text-left px-4 py-2 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2 text-xs font-medium"
                                            >
                                               <Trash2 size={14} />
@@ -214,6 +223,12 @@ export default function Dashboard() {
             </div>
          </section>
 
+         <DeleteModal 
+            isOpen={!!meetingToDelete}
+            onClose={() => setMeetingToDelete(null)}
+            onConfirm={handleDelete}
+            title="Xác nhận xóa bản ghi"
+         />
       </div>
    );
 }

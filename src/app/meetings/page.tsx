@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, Filter, Clock, MoreHorizontal, FileVideo, Plus, Loader2, Trash2, X } from 'lucide-react';
+import { Search, Filter, Clock, MoreHorizontal, AudioLines, Plus, Loader2, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { DeleteModal } from '@/components/meetings/DeleteModal';
 
 interface Meeting {
   id: string;
@@ -24,7 +25,7 @@ function MeetingsContent() {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [meetingToDelete, setMeetingToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     const search = searchParams.get('search');
@@ -50,21 +51,21 @@ function MeetingsContent() {
     fetchMeetings();
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa cuộc họp này không?")) return;
+  const handleDelete = async () => {
+    if (!meetingToDelete) return;
     
     try {
-      const response = await fetch(`http://localhost:8000/meetings/${id}`, {
+      const response = await fetch(`http://localhost:8000/meetings/${meetingToDelete}`, {
         method: 'DELETE',
       });
       if (response.ok) {
-        setMeetings(prev => prev.filter(m => m.id !== id));
-        setActiveMenu(null);
+        setMeetings(prev => prev.filter(m => m.id !== meetingToDelete));
       } else {
-        alert("Xóa cuộc họp thất bại.");
+        throw new Error("Failed to delete");
       }
     } catch (error) {
       console.error("Error deleting meeting:", error);
+      throw error;
     }
   };
 
@@ -192,7 +193,7 @@ function MeetingsContent() {
                </div>
             ) : filteredMeetings.length === 0 ? (
                <div className="w-full h-full flex flex-col items-center justify-center p-20 opacity-40">
-                  <FileVideo size={48} strokeWidth={1} className="mb-4" />
+                  <AudioLines size={48} strokeWidth={1} className="mb-4 text-foreground/20" />
                   <p className="text-sm font-medium">Chưa có bản ghi nào được tìm thấy.</p>
                </div>
             ) : (
@@ -204,7 +205,7 @@ function MeetingsContent() {
                         <th className="px-8 py-5 font-medium">Thời lượng</th>
                         <th className="px-8 py-5 font-medium text-center">Người tham gia</th>
                         <th className="px-8 py-5 font-medium text-right">Trạng thái</th>
-                        <th className="px-8 py-5 text-right"></th>
+                        <th className="px-8 py-5 font-medium text-right">Hành động</th>
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -213,7 +214,7 @@ function MeetingsContent() {
                            <td className="px-8 py-5">
                               <Link href={`/meetings/${item.id}`} className="flex items-center gap-4">
                                  <div className="w-10 h-10 rounded-xl bg-card border border-white/5 flex items-center justify-center text-foreground/90 group-hover:text-accent group-hover:border-accent/20 transition-all">
-                                    <FileVideo size={20} strokeWidth={1.5} />
+                                    <AudioLines size={20} strokeWidth={1.5} />
                                  </div>
                                  <span className="font-medium text-foreground/90 group-hover:text-accent transition-colors">
                                     {item.title}
@@ -233,32 +234,27 @@ function MeetingsContent() {
                                  {item.status}
                               </span>
                            </td>
-                           <td className="px-8 py-5 text-right relative">
+                           <td className="px-8 py-5 text-right">
                               <button 
-                                 onClick={() => setActiveMenu(activeMenu === item.id ? null : item.id)}
-                                 className="hover:text-foreground transition-colors p-2 text-foreground/30 group-hover:text-foreground/60"
+                                 onClick={() => setMeetingToDelete(item.id)}
+                                 className="hover:text-red-500 transition-all p-2 text-foreground/20 hover:bg-red-500/10 rounded-lg flex items-center justify-center ml-auto group/btn"
+                                 title="Xóa cuộc họp"
                               >
-                                 <MoreHorizontal size={16} />
+                                 <Trash2 size={16} className="group-hover/btn:scale-110 transition-transform" />
                               </button>
-                              
-                              {activeMenu === item.id && (
-                                 <div className="absolute right-8 top-12 w-48 glass-panel rounded-xl border border-border shadow-2xl z-50 py-2 animate-in fade-in zoom-in-95 duration-200">
-                                    <button 
-                                       onClick={() => handleDelete(item.id)}
-                                       className="w-full text-left px-4 py-2 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2 text-xs font-medium"
-                                    >
-                                       <Trash2 size={14} />
-                                       Xóa cuộc họp
-                                    </button>
-                                 </div>
-                              )}
                            </td>
                         </tr>
                      ))}
                   </tbody>
                </table>
             )}
-         </div>
+           <DeleteModal 
+        isOpen={!!meetingToDelete}
+        onClose={() => setMeetingToDelete(null)}
+        onConfirm={handleDelete}
+        title="Xác nhận xóa bản ghi"
+      />
+    </div>
       </div>
 
     </div>

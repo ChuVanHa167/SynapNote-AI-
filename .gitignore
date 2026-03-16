@@ -51,6 +51,13 @@ backend/**/__pycache__/
 
 # backend runtime files
 backend/temp/
+backend/uploads/
+uploads/
+*.mp4
+*.mp3
+*.mov
+*.wav
+*.avi
 
 # editor and OS files
 .DS_Store
