@@ -3,6 +3,21 @@ Trợ lý ghi chép & trích xuất nội dung cuộc họp thông minh
 
 https://chatgpt.com/share/69ae8402-9e20-800b-8299-e16c896c91b8
 
+# Cách thức chạy code 
+Mở Terminal 1
+
+cd backend
+python -m uvicorn main:app --reload --port 8000 
+
+# Cài đặt thư viện
+Mở Terminal 2
+
+npm install
+
+# Chạy môi trường phát triển
+
+npm run dev 
+
 # Gitflow: 
 ```
 main
