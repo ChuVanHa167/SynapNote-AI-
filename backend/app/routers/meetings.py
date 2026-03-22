@@ -22,7 +22,7 @@ async def list_meetings(service: MeetingService = Depends(get_meeting_service)):
 async def get_meeting(meeting_id: str, service: MeetingService = Depends(get_meeting_service)):
     return service.get_meeting(meeting_id)
 
-def run_background_processing(meeting_id: str, file_path: str):
+def run_background_processing(meeting_id: str, file_path: str, stt_profile: str = "auto", duration: Optional[str] = None):
     # This runs in a background thread and needs its own DB session
     from app.database import SessionLocal
     from app.repositories.sql_repos import SqlMeetingRepository
@@ -31,7 +31,7 @@ def run_background_processing(meeting_id: str, file_path: str):
     try:
         repo = SqlMeetingRepository(db)
         service = MeetingService(repo)
-        service.process_ai_summary(meeting_id, file_path)
+        service.process_ai_summary(meeting_id, file_path, stt_profile=stt_profile, duration=duration)
     finally:
         db.close()
 
@@ -41,10 +41,12 @@ async def upload_audio(
     file: UploadFile = File(...),
     title: Optional[str] = Form(None), 
     duration: Optional[str] = Form(None),
+    stt_profile: Optional[str] = Form("auto"),
     service: MeetingService = Depends(get_meeting_service)
 ):
     # 1. Start meeting in PENDING status
     new_meeting = service.upload_audio_and_process(file.filename, title, duration)
+    MeetingService.clear_cancel(new_meeting.id)
     
     # 2. Determine paths early (Persistent storage)
     is_video = file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))
@@ -74,7 +76,13 @@ async def upload_audio(
         service.meeting_repo.update(new_meeting.id, {"audio_url": public_url})
 
     # 5. Start background AI processing (using the persistent path)
-    background_tasks.add_task(run_background_processing, new_meeting.id, persistent_path)
+    background_tasks.add_task(
+        run_background_processing,
+        new_meeting.id,
+        persistent_path,
+        stt_profile or "auto",
+        duration,
+    )
     
     return service.get_meeting(new_meeting.id)
 
@@ -89,6 +97,7 @@ async def delete_meeting(meeting_id: str, service: MeetingService = Depends(get_
 async def reprocess_meeting(
     meeting_id: str,
     background_tasks: BackgroundTasks,
+    stt_profile: Optional[str] = "auto",
     service: MeetingService = Depends(get_meeting_service)
 ):
     # 1. Check if meeting exists
@@ -98,6 +107,7 @@ async def reprocess_meeting(
         raise HTTPException(status_code=404, detail="Meeting not found")
     
     # 2. Update status to PENDING/PROCESSING
+    MeetingService.clear_cancel(meeting_id)
     service.meeting_repo.update(meeting_id, {"status": "ĐANG XỬ LÝ"})
     
     # 3. Identify path for processing
@@ -110,6 +120,33 @@ async def reprocess_meeting(
     persistent_path = os.path.join(persistent_dir, filename)
     
     # 4. Trigger background task
-    background_tasks.add_task(run_background_processing, meeting_id, persistent_path)
+    background_tasks.add_task(
+        run_background_processing,
+        meeting_id,
+        persistent_path,
+        stt_profile or "auto",
+        meeting.duration,
+    )
     
+    return service.get_meeting(meeting_id)
+
+
+@router.post("/{meeting_id}/stop", response_model=Meeting)
+async def stop_processing(
+    meeting_id: str,
+    service: MeetingService = Depends(get_meeting_service),
+):
+    meeting = service.get_meeting(meeting_id)
+    if not meeting:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    MeetingService.request_cancel(meeting_id)
+    service.meeting_repo.update(
+        meeting_id,
+        {
+            "status": "LỖI",
+            "summary": "Da dung ban dich theo yeu cau nguoi dung.",
+        },
+    )
     return service.get_meeting(meeting_id)

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Sparkles, MessageSquareText, LayoutList, Lightbulb, CheckCircle2, Circle, ChevronRight, FileText } from 'lucide-react';
 import { ActionItem } from '@/types/meeting';
+import { buildApiUrl } from '@/lib/api';
 
 interface AIIntelligencePanelProps {
   meetingId: string;
@@ -32,7 +33,7 @@ export function AIIntelligencePanel({ meetingId, summary, decisions, actionItems
     setIsTyping(true);
 
     try {
-      const response = await fetch('http://localhost:8000/chat/query', {
+      const response = await fetch(buildApiUrl('/chat/query'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

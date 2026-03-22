@@ -2,17 +2,27 @@ import os
 import re
 import ffmpeg
 from faster_whisper import WhisperModel
+from typing import Dict, Any, Tuple
 
 # =========================
 # ⚙️ CONFIG
 # =========================
-MODEL_SIZE = "small"
+MODEL_SIZE = os.getenv("STT_MODEL_SIZE", "tiny")
 LANGUAGE = "vi"
-CHUNK_DURATION = 30
+BEAM_SIZE = int(os.getenv("STT_BEAM_SIZE", "1"))
+BEST_OF = int(os.getenv("STT_BEST_OF", "1"))
+TEMPERATURE = float(os.getenv("STT_TEMPERATURE", "0"))
+VAD_FILTER = os.getenv("STT_VAD_FILTER", "true").lower() == "true"
+COMPUTE_TYPE = os.getenv("STT_COMPUTE_TYPE", "int8")
+CPU_THREADS = int(os.getenv("STT_CPU_THREADS", str(os.cpu_count() or 4)))
+AUDIO_FILTER = os.getenv("STT_AUDIO_FILTER", "off").lower()
 
 # 📂 PATH
 INPUT_AUDIO = "data/input/test.m4a"
 OUTPUT_TRANSCRIPT = "data/output/transcript.txt"
+
+_MODEL = None
+_MODEL_CACHE: Dict[Tuple[str, str], WhisperModel] = {}
 
 
 # =========================
@@ -28,15 +38,19 @@ def convert_audio(input_path: str) -> str:
 
     output_path = "temp.wav"
 
+    output_kwargs: Dict[str, Any] = {
+        "ac": 1,
+        "ar": 16000,
+    }
+
+    # Optional denoise filter, disabled by default to avoid over-filtering speech.
+    if AUDIO_FILTER == "speech_band":
+        output_kwargs["af"] = "highpass=f=80, lowpass=f=7000"
+
     (
         ffmpeg
         .input(input_path)
-        .output(
-            output_path,
-            ac=1,
-            ar=16000,
-            af="highpass=f=200, lowpass=f=3000"
-        )
+        .output(output_path, **output_kwargs)
         .overwrite_output()
         .run(quiet=True)
     )
@@ -45,67 +59,51 @@ def convert_audio(input_path: str) -> str:
 
 
 # =========================
-# ✂️ CHIA AUDIO
-# =========================
-def split_audio(input_path: str):
-    probe = ffmpeg.probe(input_path)
-    duration = float(probe['format']['duration'])
-
-    chunks = []
-    start = 0
-    index = 0
-
-    while start < duration:
-        output = f"chunk_{index}.wav"
-
-        (
-            ffmpeg
-            .input(input_path, ss=start, t=CHUNK_DURATION)
-            .output(output, acodec='copy')
-            .overwrite_output()
-            .run(quiet=True)
-        )
-
-        chunks.append(output)
-        start += CHUNK_DURATION
-        index += 1
-
-    return chunks
-
-
-# =========================
 # 🧠 STT CORE
 # =========================
-def transcribe(audio_path: str):
-    print("🔄 Loading model...")
+def get_model(model_size: str = MODEL_SIZE, compute_type: str = COMPUTE_TYPE) -> WhisperModel:
+    key = (model_size, compute_type)
+    if key not in _MODEL_CACHE:
+        print(f"Loading Whisper model: {model_size} ({compute_type})")
+        _MODEL_CACHE[key] = WhisperModel(
+            model_size,
+            device="cpu",
+            compute_type=compute_type,
+            cpu_threads=max(1, CPU_THREADS),
+        )
+    return _MODEL_CACHE[key]
 
-    model = WhisperModel(
-        MODEL_SIZE,
-        device="cpu",
-        compute_type="int8"
+
+def transcribe(audio_path: str, profile_config: Dict[str, Any] | None = None):
+    cfg = profile_config or {}
+    model_size = str(cfg.get("model_size", MODEL_SIZE))
+    compute_type = str(cfg.get("compute_type", COMPUTE_TYPE))
+    beam_size = int(cfg.get("beam_size", BEAM_SIZE))
+    best_of = int(cfg.get("best_of", BEST_OF))
+    temperature = float(cfg.get("temperature", TEMPERATURE))
+    vad_filter = bool(cfg.get("vad_filter", VAD_FILTER))
+    without_timestamps = bool(cfg.get("without_timestamps", False))
+    condition_on_previous_text = bool(cfg.get("condition_on_previous_text", True))
+
+    model = get_model(model_size=model_size, compute_type=compute_type)
+    print(f"Transcribing: {os.path.basename(audio_path)}")
+
+    segments, _ = model.transcribe(
+        audio_path,
+        language=LANGUAGE,
+        beam_size=beam_size,
+        best_of=best_of,
+        temperature=temperature,
+        vad_filter=vad_filter,
+        condition_on_previous_text=condition_on_previous_text,
+        without_timestamps=without_timestamps,
     )
 
-    chunks = split_audio(audio_path)
     full_text = []
-
-    for chunk in chunks:
-        print(f"🎙️ {chunk}")
-
-        segments, _ = model.transcribe(
-            chunk,
-            language=LANGUAGE,
-            beam_size=8,
-            best_of=8,
-            temperature=0,
-            vad_filter=True
-        )
-
-        for seg in segments:
-            text = seg.text.strip()
-            if text:
-                full_text.append(text)
-
-        os.remove(chunk)
+    for seg in segments:
+        text = seg.text.strip()
+        if text:
+            full_text.append(text)
 
     return " ".join(full_text)
 

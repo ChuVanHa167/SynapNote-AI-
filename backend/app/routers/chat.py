@@ -1,17 +1,18 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 from app.models.schemas import ChatRequest, ChatMessage
+from app.database import get_db
+from app.repositories.sql_repos import SqlMeetingRepository
+from app.services.ai_bridge_service import AIBridgeService
 
 router = APIRouter(prefix="/chat", tags=["ai-chat"])
 
 @router.post("/query", response_model=ChatMessage)
-async def ask_assistant(request: ChatRequest):
-    # This simulates RAG approach
-    # In reality: It fetches the transcript embeddings from Vector DB (Pinecone) based on request.room_id
-    # Then sends the specific chunks to LLM (OpenAI)
-    
-    context_msg = "Tôi đang tìm kiếm trên toàn bộ dữ liệu."
-    if request.meeting_id:
-        context_msg = f"Dựa vào bản ghi âm của cuộc họp: {request.meeting_id}."
+async def ask_assistant(request: ChatRequest, db: Session = Depends(get_db)):
+    repo = SqlMeetingRepository(db)
+    ai_service = AIBridgeService()
 
-    mock_reply = f"{context_msg} Bạn vừa hỏi: '{request.message}'. Ngân sách đã được phê duyệt tăng 20%."
-    return {"role": "assistant", "content": mock_reply}
+    meeting = repo.get_by_id(request.meeting_id) if request.meeting_id else None
+    answer = ai_service.answer_question(request.message, meeting)
+
+    return {"role": "assistant", "content": answer}

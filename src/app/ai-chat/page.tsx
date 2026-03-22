@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Send, Sparkles, Bot, Search, Briefcase, FileText, ChevronDown, Paperclip, Loader2 } from 'lucide-react';
+import { buildApiUrl } from '@/lib/api';
 
 export default function AIChatPage() {
   const [messages, setMessages] = useState([
@@ -19,7 +20,7 @@ export default function AIChatPage() {
   useEffect(() => {
     const fetchMeetings = async () => {
       try {
-        const response = await fetch('http://localhost:8000/meetings/');
+            const response = await fetch(buildApiUrl('/meetings/'));
         if (response.ok) {
           const data = await response.json();
           setMeetings(data);
@@ -44,7 +45,7 @@ export default function AIChatPage() {
     setIsTyping(true);
     
     try {
-      const response = await fetch('http://localhost:8000/chat/query', {
+         const response = await fetch(buildApiUrl('/chat/query'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -45,6 +45,33 @@ class SqlMeetingRepository(IMeetingRepository):
         if db_meeting:
             print(f"[Repository] Updating meeting {meeting_id}. Keys: {list(data.keys())}")
             for key, value in data.items():
+                if key == "decisions":
+                    db_meeting.decisions.clear()
+                    for item in value or []:
+                        text = str(item).strip()
+                        if text:
+                            db_meeting.decisions.append(models.MeetingDecision(content=text))
+                    continue
+
+                if key == "action_items":
+                    db_meeting.action_items.clear()
+                    for item in value or []:
+                        if not isinstance(item, dict):
+                            continue
+                        task = str(item.get("task") or "").strip()
+                        if not task:
+                            continue
+                        db_meeting.action_items.append(
+                            models.ActionItem(
+                                id=str(item.get("id") or uuid.uuid4()),
+                                task=task,
+                                assignee=str(item.get("assignee") or ""),
+                                deadline=str(item.get("deadline") or ""),
+                                status=str(item.get("status") or "pending"),
+                            )
+                        )
+                    continue
+
                 if hasattr(db_meeting, key):
                     print(f"[Repository] Setting {key} = {value}")
                     setattr(db_meeting, key, value)

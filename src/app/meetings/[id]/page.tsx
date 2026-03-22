@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Clock, Loader2, ArrowLeft, RotateCw, Trash2 } from 'lucide-react';
+import { Clock, Loader2, ArrowLeft, RotateCw, Trash2, Square } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { AudioPlayer } from '@/components/meetings/AudioPlayer';
 import { TranscriptView } from '@/components/meetings/TranscriptView';
@@ -41,6 +41,7 @@ export default function MeetingDetailPage() {
   const [parsedTranscript, setParsedTranscript] = useState<any[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -176,6 +177,29 @@ export default function MeetingDetailPage() {
     }
   };
 
+  const handleStopProcessing = async () => {
+    if (!id || !meeting || meeting.status !== 'ĐANG XỬ LÝ' || isStopping) return;
+    setIsStopping(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/meetings/${id}/stop`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const updatedMeeting = await response.json();
+        setMeeting(updatedMeeting);
+        alert('Đã gửi yêu cầu dừng bản dịch.');
+      } else {
+        alert('Không thể dừng bản dịch lúc này.');
+      }
+    } catch (error) {
+      console.error('Stop processing failed:', error);
+      alert('Lỗi kết nối khi dừng bản dịch.');
+    } finally {
+      setIsStopping(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-[1700px] mx-auto p-4 lg:p-8 h-[calc(100vh-6rem)] flex flex-col xl:flex-row gap-6">
 
@@ -201,11 +225,20 @@ export default function MeetingDetailPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={handleReprocess}
-              disabled={meeting.status === 'ĐANG XỬ LÝ'}
+              disabled={meeting.status === 'ĐANG XỬ LÝ' || isStopping}
               className={`group flex items-center gap-2 px-5 py-2.5 rounded-full glass-panel-hover border border-white/5 text-xs font-medium text-foreground/60 transition-all hover:border-accent/20 hover:text-accent ${meeting.status === 'ĐANG XỬ LÝ' ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
               <RotateCw size={14} className={meeting.status === 'ĐANG XỬ LÝ' ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'} />
               <span>Tải lại bản dịch</span>
+            </button>
+
+            <button
+              onClick={handleStopProcessing}
+              disabled={meeting.status !== 'ĐANG XỬ LÝ' || isStopping}
+              className={`group flex items-center gap-2 px-5 py-2.5 rounded-full glass-panel-hover border border-white/5 text-xs font-medium transition-all ${meeting.status === 'ĐANG XỬ LÝ' ? 'text-amber-400/80 hover:border-amber-500/20 hover:text-amber-400' : 'text-foreground/40 cursor-not-allowed opacity-40'}`}
+            >
+              <Square size={14} className={isStopping ? 'animate-pulse' : 'group-hover:scale-110 transition-transform'} />
+              <span>{isStopping ? 'Đang dừng...' : 'Dừng bản dịch'}</span>
             </button>
 
             <button
