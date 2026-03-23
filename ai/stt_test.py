@@ -7,15 +7,17 @@ from typing import Dict, Any, Tuple
 # =========================
 # ⚙️ CONFIG
 # =========================
-MODEL_SIZE = os.getenv("STT_MODEL_SIZE", "tiny")
+MODEL_SIZE = os.getenv("STT_MODEL_SIZE", "medium") # mạnh nhất large-v3
 LANGUAGE = "vi"
-BEAM_SIZE = int(os.getenv("STT_BEAM_SIZE", "1"))
-BEST_OF = int(os.getenv("STT_BEST_OF", "1"))
+BEAM_SIZE = int(os.getenv("STT_BEAM_SIZE", "8"))
+BEST_OF = int(os.getenv("STT_BEST_OF", "5"))
 TEMPERATURE = float(os.getenv("STT_TEMPERATURE", "0"))
 VAD_FILTER = os.getenv("STT_VAD_FILTER", "true").lower() == "true"
 COMPUTE_TYPE = os.getenv("STT_COMPUTE_TYPE", "int8")
 CPU_THREADS = int(os.getenv("STT_CPU_THREADS", str(os.cpu_count() or 4)))
-AUDIO_FILTER = os.getenv("STT_AUDIO_FILTER", "off").lower()
+AUDIO_FILTER = os.getenv("STT_AUDIO_FILTER", "speech_band").lower()
+REPETITION_PENALTY = 1.1
+NO_REPEAT_NGRAM_SIZE = 3
 
 # 📂 PATH
 INPUT_AUDIO = "data/input/test.m4a"
@@ -45,7 +47,7 @@ def convert_audio(input_path: str) -> str:
 
     # Optional denoise filter, disabled by default to avoid over-filtering speech.
     if AUDIO_FILTER == "speech_band":
-        output_kwargs["af"] = "highpass=f=80, lowpass=f=7000"
+        output_kwargs["af"] = "loudnorm,highpass=f=80,lowpass=f=7000"
 
     (
         ffmpeg
@@ -84,6 +86,9 @@ def transcribe(audio_path: str, profile_config: Dict[str, Any] | None = None):
     vad_filter = bool(cfg.get("vad_filter", VAD_FILTER))
     without_timestamps = bool(cfg.get("without_timestamps", False))
     condition_on_previous_text = bool(cfg.get("condition_on_previous_text", True))
+    repetition_penalty = float(cfg.get("repetition_penalty", REPETITION_PENALTY))
+    no_repeat_ngram_size = int(cfg.get("no_repeat_ngram_size", NO_REPEAT_NGRAM_SIZE))
+    condition_on_previous_text=True
 
     model = get_model(model_size=model_size, compute_type=compute_type)
     print(f"Transcribing: {os.path.basename(audio_path)}")
@@ -97,15 +102,28 @@ def transcribe(audio_path: str, profile_config: Dict[str, Any] | None = None):
         vad_filter=vad_filter,
         condition_on_previous_text=condition_on_previous_text,
         without_timestamps=without_timestamps,
+        repetition_penalty=repetition_penalty,
+        no_repeat_ngram_size=no_repeat_ngram_size,
     )
 
     full_text = []
-    for seg in segments:
+    dynamic_context = ""
+
+    for i, seg in enumerate(segments):
+
         text = seg.text.strip()
-        if text:
-            full_text.append(text)
+
+        if not text:
+            continue
+
+        # 🔥 cập nhật context theo những đoạn trước
+        if i < 3:
+            dynamic_context += " " + text
+
+        full_text.append(text)
 
     return " ".join(full_text)
+
 
 
 # =========================
@@ -116,28 +134,104 @@ def clean_text(text: str):
     Fix tiếng Việt cơ bản
     """
 
-    text = text.lower().strip()
+    text = text.strip()
 
     replacements = {
+        # sai âm / Việt hóa
         "xin viên": "sinh viên",
+        "xinh viên": "sinh viên",
+        "sinh viên": "sinh viên",
         "công ợi": "công nghệ",
+        "công nghe": "công nghệ",
+        "công ở thông tin": "công nghệ thông tin",
+        "hoa công": "khoa công",
         "đồng á": "Đông Á",
-        "lam ba": "làm bài",
-        "hà nội": "Hà Nội"
+        "trở ra học": "trường đại học",
+        "lâm ba": "làm bài",
+        "làm ba": "làm bài",
+        "trử vấn": "chữ văn",
+        "trử": "chữ",
+        "vấn ha": "Văn Hà",
+
+        # công nghệ / học thuật
+        "phần mềm": "phần mềm",
+        "triển chai": "triển khai",
+        "giái pháp": "giải pháp",
+        "xử lý": "xử lý",
+        "phân tích": "phân tích",
+        "khoa công nghệ thông tin": "khoa công nghệ thông tin",
+        "trường đại học đông á": "trường đại học Đông Á",
+        "đại học đông á": "Đại học Đông Á",
+
+        # tiếng anh / tech
+        "pai thon": "Python",
+        "phai thon": "Python",
+        "paiton": "Python",
+        "bét en": "backend",
+        "back en": "backend",
+        "phờ rông đền": "frontend",
+        "front end": "frontend",
+        "đê ta bây": "database",
+        "dat abase": "database",
+        "a pi": "API",
+        "api ai": "API",
+        "ai ai": "AI",
+        "mi chin lening": "machine learning",
+        "mác chin lening": "machine learning",
+        "râu đờ map": "roadmap",
+        "đét lai n": "deadline",
+        "mi ting": "meeting",
+        "re viu": "review",
+        "đi bát": "debug",
+        "đi plôi": "deploy",
+        "ser vơ": "server",
+        "cli ent": "client",
+
+        # từ họp hành
+        "nhiệm vụ": "nhiệm vụ",
+        "công việc": "công việc",
+        "phân công": "phân công",
+        "báo cáo": "báo cáo",
+        "tiến độ": "tiến độ",
+        "mục tiêu": "mục tiêu",
+        "kết luận": "kết luận",
     }
 
     for wrong, correct in replacements.items():
         text = re.sub(rf"\b{wrong}\b", correct, text)
 
+    text = re.sub(r"\b(à|ờ|ừ|ừm|uh|um|kiểu như|nói chung là|thực ra|thật ra)\b", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(\w+)( \1\b)+", r"\1", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r'\b(\w+)( \1\b)+', r'\1', text)
-
-    text = text.capitalize()
 
     if not text.endswith("."):
         text += "."
 
     return text
 
+# =========================
+# 🧠 HOTWORDS
+# =========================
+
+def extract_hotwords(text):
+
+    words = text.split()
+
+    freq = {}
+
+    for w in words:
+        w = w.lower()
+        if len(w) < 4:
+            continue
+        freq[w] = freq.get(w, 0) + 1
+
+    # lấy top từ lặp nhiều
+    hot = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+
+    hotwords = [w for w, c in hot[:10]]
+
+    return ", ".join(hotwords)
 
 # =========================
 # 🧠 PIPELINE
@@ -150,6 +244,9 @@ def run_stt():
     try:
         raw = transcribe(wav_path)
         clean = clean_text(raw)
+
+        auto_hotwords = extract_hotwords(raw)
+        print("🔥 HOTWORDS AUTO:", auto_hotwords)
 
         print("\n===== FINAL TRANSCRIPT =====\n")
         print(clean)
