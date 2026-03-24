@@ -9,6 +9,7 @@ import { AIIntelligencePanel } from '@/components/meetings/AIIntelligencePanel';
 import Link from 'next/link';
 import { DeleteModal } from '@/components/meetings/DeleteModal';
 import { VideoPlayer } from '@/components/meetings/VideoPlayer';
+import { useNotification } from '@/context/NotificationContext';
 
 interface MeetingDetail {
   id: string;
@@ -42,6 +43,7 @@ export default function MeetingDetailPage() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const { showNotification } = useNotification();
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -147,13 +149,13 @@ export default function MeetingDetailPage() {
       if (response.ok) {
         const updatedMeeting = await response.json();
         setMeeting(updatedMeeting);
-        alert("Đã bắt đầu xử lý lại bản dịch. Vui lòng đợi trong giây lát.");
+        showNotification("Đã bắt đầu xử lý lại bản dịch. Vui lòng đợi trong giây lát.", "success");
       } else {
-        alert("Không thể yêu cầu xử lý lại.");
+        showNotification("Không thể yêu cầu xử lý lại.", "error");
       }
     } catch (error) {
       console.error("Reprocess failed:", error);
-      alert("Lỗi kết nối khi yêu cầu xử lý lại.");
+      showNotification("Lỗi kết nối khi yêu cầu xử lý lại.", "error");
     } finally {
       setIsLoading(false);
     }
@@ -188,13 +190,13 @@ export default function MeetingDetailPage() {
       if (response.ok) {
         const updatedMeeting = await response.json();
         setMeeting(updatedMeeting);
-        alert('Đã gửi yêu cầu dừng bản dịch.');
+        showNotification('Đã gửi yêu cầu dừng bản dịch.', 'success');
       } else {
-        alert('Không thể dừng bản dịch lúc này.');
+        showNotification('Không thể dừng bản dịch lúc này.', 'error');
       }
     } catch (error) {
       console.error('Stop processing failed:', error);
-      alert('Lỗi kết nối khi dừng bản dịch.');
+      showNotification('Lỗi kết nối khi dừng bản dịch.', 'error');
     } finally {
       setIsStopping(false);
     }

@@ -195,6 +195,8 @@ def clean_text(text: str):
         "tiến độ": "tiến độ",
         "mục tiêu": "mục tiêu",
         "kết luận": "kết luận",
+        "cuộc hộp": "cuộc họp",
+        "chéo dài": "kéo dài",
     }
 
     for wrong, correct in replacements.items():

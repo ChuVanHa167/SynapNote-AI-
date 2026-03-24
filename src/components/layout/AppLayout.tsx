@@ -9,6 +9,9 @@ import { UserProvider } from '@/context/UserContext';
 import { UploadProvider, useUpload } from '@/context/UploadContext';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 
+import { NotificationProvider } from '@/context/NotificationContext';
+import { GlobalNotifications } from '@/components/common/GlobalNotifications';
+
 function AppContent({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const pathname = usePathname();
@@ -43,6 +46,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+
+      {/* Global Notifications */}
+      <GlobalNotifications />
 
       {/* Global Background Upload Indicator */}
       {showGlobalIndicator && (
@@ -103,9 +109,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <UserProvider>
       <UploadProvider>
-        <AppContent>
-          {children}
-        </AppContent>
+        <NotificationProvider>
+          <AppContent>
+            {children}
+          </AppContent>
+        </NotificationProvider>
       </UploadProvider>
     </UserProvider>
   );
