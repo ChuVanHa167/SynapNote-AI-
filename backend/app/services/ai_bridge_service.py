@@ -106,7 +106,7 @@ class AIBridgeService:
 
     GROQ_MODEL = "whisper-large-v3"
     GEMINI_MODEL = "gemini-flash-lite-latest"
-    DEFAULT_CHUNK_SECONDS = 300  # 5 minutes
+    DEFAULT_CHUNK_SECONDS = 90  # 1.5 minutes - optimal for Vietnamese transcription accuracy
 
     @staticmethod
     def normalize_profile(profile: Optional[str]) -> str:
@@ -279,7 +279,11 @@ class AIBridgeService:
         url = "https://api.groq.com/openai/v1/audio/transcriptions"
         with open(audio_path, "rb") as f:
             files = {"file": (os.path.basename(audio_path), f, "audio/mpeg")}
-            data = {"model": self.GROQ_MODEL, "response_format": "text"}
+            data = {
+                "model": self.GROQ_MODEL,
+                "response_format": "text",
+                "language": "vi",  # Vietnamese language for better accuracy
+            }
             headers = {"Authorization": f"Bearer {groq_api_key}"}
             resp = requests.post(url, headers=headers, files=files, data=data, timeout=120)
         if resp.status_code != 200:
@@ -346,12 +350,53 @@ class AIBridgeService:
         except Exception:
             return default_result
 
+    def _fix_transcript_with_gemini(self, transcript: str) -> str:
+        """Use Gemini to fix Vietnamese diacritics and punctuation in transcript."""
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("Gemini_api_key")
+        if not api_key:
+            return transcript  # Fallback to original if no API key
+
+        try:
+            import requests  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError("requests not installed for Gemini call") from exc
+
+        # Only fix if transcript is reasonably long (save API calls)
+        if len(transcript) < 50:
+            return transcript
+
+        prompt = (
+            "Bạn là công cụ xử lý văn bản tiếng Việt. "
+            "Nhiệm vụ: Sửa lỗi chính tả, thêm dấu câu, và phục hồi dấu tiếng Việt bị mất. "
+            "GIỮ NGUYÊN nội dung, không tóm tắt, không thêm bớt thông tin. "
+            "Chỉ trả về văn bản đã sửa, không giải thích.\n\n"
+            f"Văn bản cần sửa:\n{transcript[:3000]}"  # Limit to avoid token limits
+        )
+
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.1,  # Low temp for conservative fixes
+                "maxOutputTokens": 2048,
+            }
+        }
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.GEMINI_MODEL}:generateContent?key={api_key}"
+        resp = requests.post(url, json=payload, timeout=60)
+
+        if resp.status_code == 200:
+            data = resp.json()
+            fixed_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return fixed_text if fixed_text else transcript
+        return transcript  # Fallback on error
+
     def process_audio_groq_gemini(self, input_audio_path: str, chunk_seconds: Optional[int] = None) -> Dict[str, Any]:
         """
         Automated pipeline:
-        1) Split audio into fixed-size chunks (default 5 minutes)
-        2) Send each chunk to Groq Whisper for transcript
-        3) Send combined transcript to Gemini for summary
+        1) Split audio into fixed-size chunks (default 90 seconds)
+        2) Send each chunk to Groq Whisper for transcript (with language=vi)
+        3) Fix transcript with Gemini (restore diacritics, punctuation)
+        4) Send to Gemini for summary
         """
 
         effective_chunk = self._get_chunk_seconds(chunk_seconds)
@@ -366,6 +411,11 @@ class AIBridgeService:
                     combined_transcript.append(text)
 
             full_transcript = "\n".join(combined_transcript).strip()
+
+            # Step 3: Fix transcript with Gemini
+            if full_transcript:
+                full_transcript = self._fix_transcript_with_gemini(full_transcript)
+
             summary_payload = self._summarize_with_gemini(full_transcript) if full_transcript else {
                 "summary": "",
                 "decisions": [],

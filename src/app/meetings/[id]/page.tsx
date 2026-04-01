@@ -140,8 +140,34 @@ export default function MeetingDetailPage() {
 
   const handleReloadTranscript = async () => {
     setIsReloadingTranscript(true);
-    await fetchDetail({ silent: true });
-    setIsReloadingTranscript(false);
+    try {
+      // Gọi API để trigger AI dịch lại transcript
+      const response = await fetch(`/api/meetings/${id}/reprocess`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        // Polling để chờ kết quả xử lý
+        const pollInterval = setInterval(async () => {
+          const detailResponse = await fetch(`/api/meetings/${id}`);
+          if (detailResponse.ok) {
+            const data = await detailResponse.json();
+            if (data.status === 'HOÀN THÀNH' || data.status === 'LỖI') {
+              clearInterval(pollInterval);
+              setMeeting(data);
+              setTasks(data.action_items || []);
+              setIsReloadingTranscript(false);
+            }
+          }
+        }, 2000); // Check mỗi 2 giây
+      } else {
+        console.error('Failed to reprocess transcript');
+        setIsReloadingTranscript(false);
+      }
+    } catch (error) {
+      console.error('Error reprocessing transcript:', error);
+      setIsReloadingTranscript(false);
+    }
   };
 
   const toggleTask = (taskId: string) => {
