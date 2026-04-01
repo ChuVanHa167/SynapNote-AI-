@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, Filter, Clock, FileVideo, Plus, Loader2, Trash2 } from 'lucide-react';
+import { Search, Filter, Clock, FileVideo, Plus, Loader2, Trash2, X, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 
 interface Meeting {
@@ -18,6 +18,13 @@ export default function MeetingsPage() {
    const [meetings, setMeetings] = useState<Meeting[]>([]);
    const [isLoading, setIsLoading] = useState(true);
    const [deletingId, setDeletingId] = useState<string | null>(null);
+   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     const fetchMeetings = async () => {
@@ -55,8 +62,6 @@ export default function MeetingsPage() {
 
    const handleDelete = async (id: string) => {
       if (deletingId) return;
-      const confirmed = window.confirm("Bạn có chắc muốn xóa cuộc họp này?");
-      if (!confirmed) return;
 
       setDeletingId(id);
       try {
@@ -65,9 +70,11 @@ export default function MeetingsPage() {
             throw new Error("Failed to delete meeting");
          }
          setMeetings((prev) => prev.filter((m) => m.id !== id));
+         setDeleteConfirmId(null);
+         showToast("Xóa cuộc họp thành công!", "success");
       } catch (error) {
          console.error("Failed to delete meeting:", error);
-         alert("Không thể xóa cuộc họp. Vui lòng thử lại.");
+         showToast("Không thể xóa cuộc họp. Vui lòng thử lại.", "error");
       } finally {
          setDeletingId(null);
       }
@@ -157,18 +164,34 @@ export default function MeetingsPage() {
                               </span>
                            </td>
                            <td className="px-8 py-5 text-right">
-                              <button
-                                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 hover:text-red-300 hover:border-red-400 transition-colors disabled:opacity-60"
-                                 onClick={() => handleDelete(item.id)}
-                                 disabled={deletingId === item.id}
-                              >
-                                 {deletingId === item.id ? (
-                                    <Loader2 size={16} className="animate-spin" />
-                                 ) : (
+                              {deleteConfirmId === item.id ? (
+                                 <div className="flex items-center gap-2">
+                                    <span className="text-xs text-foreground/80">Bạn chắc chắn?</span>
+                                    <button
+                                       className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-xs font-medium"
+                                       onClick={() => handleDelete(item.id)}
+                                       disabled={deletingId === item.id}
+                                    >
+                                       {deletingId === item.id ? <Loader2 size={14} className="animate-spin" /> : "Xóa"}
+                                    </button>
+                                    <button
+                                       className="px-3 py-1.5 rounded-lg border border-border text-foreground/60 hover:text-foreground transition-colors text-xs"
+                                       onClick={() => setDeleteConfirmId(null)}
+                                       disabled={deletingId === item.id}
+                                    >
+                                       Hủy
+                                    </button>
+                                 </div>
+                              ) : (
+                                 <button
+                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 hover:text-red-300 hover:border-red-400 transition-colors"
+                                    onClick={() => setDeleteConfirmId(item.id)}
+                                    disabled={deletingId !== null}
+                                 >
                                     <Trash2 size={16} />
-                                 )}
-                                 <span>Xóa</span>
-                              </button>
+                                    <span>Xóa</span>
+                                 </button>
+                              )}
                            </td>
                         </tr>
                      ))}
@@ -177,6 +200,18 @@ export default function MeetingsPage() {
             )}
          </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+         <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-2xl border shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-300 z-50 ${
+            toast.type === 'success'
+               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+               : 'bg-red-500/10 border-red-500/30 text-red-400'
+         }`}>
+            {toast.type === 'success' ? <CheckCircle size={20} /> : <X size={20} />}
+            <span className="text-sm font-medium">{toast.message}</span>
+         </div>
+      )}
 
     </div>
   );
