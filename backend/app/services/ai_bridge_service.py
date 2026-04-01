@@ -1,0 +1,424 @@
+import os
+import re
+import sys
+import uuid
+import glob
+import json
+import math
+import shutil
+import tempfile
+from typing import Any, Dict, List, Optional
+
+from app.models.schemas import Meeting
+
+
+STT_PROFILES: Dict[str, Dict[str, Any]] = {
+    "fast": {
+        "model_size": "small",
+        "compute_type": "int8",
+        "beam_size": 1,
+        "best_of": 1,
+        "temperature": 0,
+        "vad_filter": True,
+        "without_timestamps": False,
+        "condition_on_previous_text": False,
+    },
+    "balanced": {
+        "model_size": "medium",
+        "compute_type": "int8",
+        "beam_size": 3,
+        "best_of": 3,
+        "temperature": 0,
+        "vad_filter": True,
+        "condition_on_previous_text": True,
+    },
+    "accurate": {
+        "model_size": "large-v3",
+        "compute_type": "int8",
+        "beam_size": 5,
+        "best_of": 5,
+        "temperature": 0,
+        "vad_filter": True,
+        "condition_on_previous_text": True,
+    },
+    "ultra": {
+        "model_size": "large-v3",
+        "compute_type": "float16",
+        "beam_size": 8,
+        "best_of": 8,
+        "temperature": 0,
+        "vad_filter": True,
+        "condition_on_previous_text": True,
+    },
+}
+
+
+def _ensure_project_root_on_path() -> None:
+    """Allow backend modules to import the top-level ai package."""
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    if project_root not in sys.path:
+        sys.path.append(project_root)
+
+
+def _extract_first_sentences(text: str, limit: int = 3) -> List[str]:
+    parts = [p.strip() for p in re.split(r"[.!?]+", text or "") if p.strip()]
+    return parts[:limit]
+
+
+def _ensure_ffmpeg_on_path() -> bool:
+    """Ensure ffmpeg and ffprobe are available for ffmpeg-python on Windows."""
+    if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+        return True
+
+    candidates: List[str] = []
+
+    env_bin = os.getenv("FFMPEG_BIN_DIR")
+    if env_bin:
+        candidates.append(env_bin)
+
+    localappdata = os.getenv("LOCALAPPDATA", "")
+    if localappdata:
+        pattern = os.path.join(
+            localappdata,
+            "Microsoft",
+            "WinGet",
+            "Packages",
+            "Gyan.FFmpeg*",
+            "ffmpeg-*-full_build",
+            "bin",
+        )
+        candidates.extend(glob.glob(pattern))
+
+    candidates.append(r"C:\ffmpeg\bin")
+
+    for directory in candidates:
+        ffmpeg_exe = os.path.join(directory, "ffmpeg.exe")
+        ffprobe_exe = os.path.join(directory, "ffprobe.exe")
+        if os.path.exists(ffmpeg_exe) and os.path.exists(ffprobe_exe):
+            os.environ["PATH"] = f"{directory}{os.pathsep}{os.environ.get('PATH', '')}"
+            break
+
+    return bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
+
+
+class AIBridgeService:
+    """Bridge service that reuses scripts in ai/ for backend workflows."""
+
+    GROQ_MODEL = "whisper-large-v3"
+    GEMINI_MODEL = "gemini-flash-lite-latest"
+    DEFAULT_CHUNK_SECONDS = 300  # 5 minutes
+
+    @staticmethod
+    def normalize_profile(profile: Optional[str]) -> str:
+        key = (profile or "balanced").strip().lower()
+        if key == "auto":
+            key = "balanced"
+        return key if key in STT_PROFILES else "balanced"
+
+    def transcribe_audio(self, input_audio_path: str, profile: Optional[str] = "balanced") -> str:
+        _ensure_project_root_on_path()
+        temp_wav_path: Optional[str] = None
+        selected_profile = self.normalize_profile(profile)
+        stt_config = STT_PROFILES[selected_profile]
+
+        if not _ensure_ffmpeg_on_path():
+            return "He thong chua tim thay ffmpeg/ffprobe de xu ly audio."
+
+        try:
+            from ai.stt_test import clean_text, convert_audio, transcribe
+
+            temp_wav_path = convert_audio(input_audio_path)
+            raw_text = transcribe(temp_wav_path, profile_config=stt_config)
+            return clean_text(raw_text)
+        except Exception as exc:
+            print(f"[AIBridgeService] STT fallback due to error: {exc}")
+            return "Khong the trich xuat transcript tu file audio nay o thoi diem hien tai."
+        finally:
+            if temp_wav_path and os.path.exists(temp_wav_path):
+                try:
+                    os.remove(temp_wav_path)
+                except OSError:
+                    pass
+
+    def summarize_transcript(self, transcript_text: str) -> Dict[str, Any]:
+        _ensure_project_root_on_path()
+
+        default_result = {
+            "summary": "Chua the tao tom tat tu dong.",
+            "key_points": [],
+            "action_items": [],
+            "keywords": [],
+        }
+
+        if not transcript_text or not transcript_text.strip():
+            return default_result
+
+        try:
+            from ai.summary_test import summarize
+
+            result = summarize(transcript_text)
+            if isinstance(result, dict):
+                return {
+                    "summary": result.get("summary") or default_result["summary"],
+                    "key_points": result.get("key_points") or [],
+                    "action_items": result.get("action_items") or [],
+                    "keywords": result.get("keywords") or [],
+                }
+            return default_result
+        except Exception as exc:
+            print(f"[AIBridgeService] Summary fallback due to error: {exc}")
+            fallback_points = _extract_first_sentences(transcript_text, 3)
+            return {
+                "summary": " ".join(fallback_points) if fallback_points else default_result["summary"],
+                "key_points": fallback_points,
+                "action_items": [],
+                "keywords": [],
+            }
+
+    def process_audio_file(self, input_audio_path: str, profile: Optional[str] = "balanced") -> Dict[str, Any]:
+        transcript = self.transcribe_audio(input_audio_path, profile=profile)
+        summary_payload = self.summarize_transcript(transcript)
+
+        decisions = summary_payload.get("key_points") or []
+        action_items = summary_payload.get("action_items") or []
+
+        normalized_action_items: List[Dict[str, str]] = []
+        for item in action_items:
+            if isinstance(item, str):
+                normalized_action_items.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "task": item,
+                        "assignee": "",
+                        "deadline": "",
+                        "status": "pending",
+                    }
+                )
+            elif isinstance(item, dict):
+                normalized_action_items.append(
+                    {
+                        "id": str(item.get("id") or uuid.uuid4()),
+                        "task": str(item.get("task") or ""),
+                        "assignee": str(item.get("assignee") or ""),
+                        "deadline": str(item.get("deadline") or ""),
+                        "status": str(item.get("status") or "pending"),
+                    }
+                )
+
+        return {
+            "transcript": transcript,
+            "summary": summary_payload.get("summary") or "",
+            "decisions": [str(x) for x in decisions if str(x).strip()],
+            "action_items": normalized_action_items,
+        }
+
+    # === New: Groq STT + Gemini summary pipeline ===
+    def _probe_duration_seconds(self, input_audio_path: str) -> float:
+        try:
+            import ffmpeg  # type: ignore
+
+            probe = ffmpeg.probe(input_audio_path)
+            duration = float(probe["format"].get("duration", 0))
+            return duration if not math.isnan(duration) else 0.0
+        except Exception:
+            return 0.0
+
+    def _get_chunk_seconds(self, override: Optional[int] = None) -> int:
+        env_val = os.getenv("CHUNK_SECONDS") or os.getenv("CHUNK_SECS")
+        try:
+            parsed = int(env_val) if env_val is not None else None
+        except ValueError:
+            parsed = None
+        effective = override or parsed or self.DEFAULT_CHUNK_SECONDS
+        return max(30, effective)  # clamp to minimum 30s to avoid too many calls
+
+    def _chunk_audio(self, input_audio_path: str, chunk_seconds: int) -> List[str]:
+        if not _ensure_ffmpeg_on_path():
+            raise RuntimeError("ffmpeg/ffprobe not found for chunking")
+
+        try:
+            import ffmpeg  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError("ffmpeg-python is missing; install dependency") from exc
+
+        duration = self._probe_duration_seconds(input_audio_path)
+        if duration <= 0:
+            raise RuntimeError("Cannot read audio duration for chunking")
+
+        chunk_dir = tempfile.mkdtemp(prefix="sn_chunk_")
+        chunks: List[str] = []
+
+        start = 0.0
+        idx = 0
+        while start < duration:
+            out_path = os.path.join(chunk_dir, f"chunk_{idx:04d}.mp3")
+            clip_length = min(chunk_seconds, duration - start)
+            (
+                ffmpeg
+                .input(input_audio_path, ss=start, t=clip_length)
+                .output(out_path, acodec="libmp3lame", ar=16000, ac=1, vn=None, loglevel="error")
+                .overwrite_output()
+                .run()
+            )
+            chunks.append(out_path)
+            start += clip_length
+            idx += 1
+
+        return chunks
+
+    def _transcribe_with_groq(self, audio_path: str) -> str:
+        groq_api_key = os.getenv("GROQ_API_KEY") or os.getenv("Groq_api_key")
+        if not groq_api_key:
+            raise RuntimeError("Missing GROQ_API_KEY")
+
+        try:
+            import requests  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError("requests not installed for Groq call") from exc
+
+        url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        with open(audio_path, "rb") as f:
+            files = {"file": (os.path.basename(audio_path), f, "audio/mpeg")}
+            data = {"model": self.GROQ_MODEL, "response_format": "text"}
+            headers = {"Authorization": f"Bearer {groq_api_key}"}
+            resp = requests.post(url, headers=headers, files=files, data=data, timeout=120)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Groq STT failed: {resp.status_code} {resp.text}")
+        return resp.text.strip()
+
+    def _summarize_with_gemini(self, transcript: str) -> Dict[str, Any]:
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("Gemini_api_key")
+        if not api_key:
+            raise RuntimeError("Missing GEMINI_API_KEY")
+
+        default_result = {
+            "summary": "Chua the tao tom tat tu dong.",
+            "decisions": [],
+            "action_items": [],
+        }
+
+        try:
+            import requests  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError("requests not installed for Gemini call") from exc
+
+        schema_hint = (
+            "Tra ve JSON dung schema: {"  # noqa: E501
+            "\"summary\": string <=200 tu, "
+            "\"decisions\": [string], "
+            "\"action_items\": [{\"task\": string, \"assignee\": string, \"deadline\": string, \"status\": string}]"
+            "}"
+        )
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": (
+                                "Bạn là trợ lý AI. Hãy tóm tắt nội dung cuộc họp dưới 200 từ, "
+                                "liệt kê quyết định chính và hành động tiếp theo (nếu có). "
+                                "Chi trả về JSON đúng schema, không thêm văn bản thừa.\n"
+                                f"{schema_hint}\n\nTranscript:\n{transcript}"
+                            )
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseMimeType": "application/json"
+            },
+        }
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.GEMINI_MODEL}:generateContent?key={api_key}"
+        resp = requests.post(url, json=payload, timeout=60)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Gemini summary failed: {resp.status_code} {resp.text}")
+
+        data = resp.json()
+        try:
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            parsed = json.loads(text)
+            return {
+                "summary": parsed.get("summary") or default_result["summary"],
+                "decisions": parsed.get("decisions") or [],
+                "action_items": parsed.get("action_items") or [],
+            }
+        except Exception:
+            return default_result
+
+    def process_audio_groq_gemini(self, input_audio_path: str, chunk_seconds: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Automated pipeline:
+        1) Split audio into fixed-size chunks (default 5 minutes)
+        2) Send each chunk to Groq Whisper for transcript
+        3) Send combined transcript to Gemini for summary
+        """
+
+        effective_chunk = self._get_chunk_seconds(chunk_seconds)
+        chunks: List[str] = []
+        combined_transcript: List[str] = []
+
+        try:
+            chunks = self._chunk_audio(input_audio_path, effective_chunk)
+            for path in chunks:
+                text = self._transcribe_with_groq(path)
+                if text:
+                    combined_transcript.append(text)
+
+            full_transcript = "\n".join(combined_transcript).strip()
+            summary_payload = self._summarize_with_gemini(full_transcript) if full_transcript else {
+                "summary": "",
+                "decisions": [],
+                "action_items": [],
+            }
+
+            return {
+                "transcript": full_transcript,
+                "summary": summary_payload.get("summary") or "",
+                "decisions": summary_payload.get("decisions") or [],
+                "action_items": summary_payload.get("action_items") or [],
+            }
+        finally:
+            for path in chunks:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+    def answer_question(self, message: str, meeting: Optional[Meeting]) -> str:
+        question = (message or "").strip()
+        if not question:
+            return "Ban hay nhap cau hoi de toi co the ho tro."
+
+        if not meeting:
+            return "Khong tim thay cuoc hop phu hop de tra loi cau hoi nay."
+
+        normalized_status = (meeting.status or "").upper()
+        is_completed = normalized_status in {"HOAN THANH", "HOÀN THÀNH"}
+
+        if not is_completed and not (meeting.summary or meeting.transcript):
+            return "Du lieu AI cua cuoc hop nay chua san sang. Ban hay doi qua trinh xu ly hoan tat."
+
+        summary = (meeting.summary or "").strip()
+        transcript = (meeting.transcript or "").strip()
+
+        if any(k in question.lower() for k in ["tom tat", "summary", "tong ket"]):
+            if summary:
+                return f"Tom tat cuoc hop: {summary}"
+
+        if any(k in question.lower() for k in ["quyet dinh", "decision"]):
+            if meeting.decisions:
+                listed = "\n".join([f"- {d}" for d in meeting.decisions])
+                return f"Cac quyet dinh chinh:\n{listed}"
+
+        if transcript:
+            snippet = " ".join(_extract_first_sentences(transcript, 2))
+            return (
+                "Toi da tim trong transcript va summary cua cuoc hop. "
+                f"Thong tin lien quan: {snippet if snippet else summary}"
+            )
+
+        if summary:
+            return f"Toi da tim trong summary va thay noi dung lien quan: {summary}"
+
+        return "Hien tai chua co du lieu transcript/summary de tra loi chinh xac."

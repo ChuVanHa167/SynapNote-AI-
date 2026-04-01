@@ -1,14 +1,17 @@
-import { Play, Pause, Rewind, FastForward, Volume2 } from 'lucide-react';
+import { Play, Pause, Rewind, FastForward, Volume2, VolumeX } from 'lucide-react';
 
 interface AudioPlayerProps {
   isPlaying: boolean;
   onPlayPause: () => void;
+  onSeek: (value: number) => void;
   progress: number;
   currentTime: string;
   duration: string;
+  volume: number;
+  onVolumeChange: (value: number) => void;
 }
 
-export function AudioPlayer({ isPlaying, onPlayPause, progress, currentTime, duration }: AudioPlayerProps) {
+export function AudioPlayer({ isPlaying, onPlayPause, onSeek, progress, currentTime, duration, volume, onVolumeChange }: AudioPlayerProps) {
   return (
     <div className="glass-panel rounded-[2rem] p-6 lg:p-10 relative overflow-hidden group animate-in fade-in zoom-in-95 duration-700 delay-150 fill-mode-both border border-border">
       <div className="absolute -top-32 -right-32 w-64 h-64 bg-accent/10 rounded-full blur-[80px] group-hover:bg-accent/20 transition-colors duration-700"></div>
@@ -29,20 +32,28 @@ export function AudioPlayer({ isPlaying, onPlayPause, progress, currentTime, dur
         </div>
 
         <div className="hidden md:flex items-center gap-4 text-foreground/80 glass-panel px-4 py-2 rounded-full">
-          <Volume2 size={16} />
-          <div className="w-20 h-1 bg-foreground/10 rounded-full overflow-hidden">
-            <div className="w-2/3 h-full bg-foreground/50 rounded-full"></div>
-          </div>
+          {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(volume * 100)}
+            onChange={(e) => onVolumeChange(Number(e.target.value) / 100)}
+            className="w-24 h-1 accent-accent/80"
+          />
         </div>
       </div>
 
       <div className="flex items-center gap-4 text-xs font-medium z-10 w-full mt-8 relative">
         <span className="text-accent min-w-[40px] tracking-wider">{currentTime}</span>
-        <div className="flex-1 h-1.5 bg-foreground/5 rounded-full relative cursor-pointer group shadow-inner overflow-hidden">
-          <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-accent/50 to-accent rounded-full transition-all duration-300 relative" style={{ width: `${progress}%` }}>
-             <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-3 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
-          </div>
-        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={progress}
+          onChange={(e) => onSeek(Number(e.target.value))}
+          className="flex-1 h-1.5 bg-foreground/5 rounded-full relative cursor-pointer group shadow-inner overflow-hidden accent-accent/80"
+        />
         <span className="text-foreground/30 min-w-[40px] tracking-wider">-{duration}</span>
       </div>
     </div>

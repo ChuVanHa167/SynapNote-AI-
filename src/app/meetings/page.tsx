@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, Filter, Clock, MoreHorizontal, FileVideo, Plus, Loader2 } from 'lucide-react';
+import { Search, Filter, Clock, FileVideo, Plus, Loader2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface Meeting {
@@ -14,14 +14,15 @@ interface Meeting {
 }
 
 export default function MeetingsPage() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+   const [searchQuery, setSearchQuery] = useState("");
+   const [meetings, setMeetings] = useState<Meeting[]>([]);
+   const [isLoading, setIsLoading] = useState(true);
+   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchMeetings = async () => {
       try {
-        const response = await fetch("http://localhost:8000/meetings");
+        const response = await fetch("/api/meetings");
         if (response.ok) {
           const data = await response.json();
           setMeetings(data);
@@ -51,6 +52,26 @@ export default function MeetingsPage() {
   const filteredMeetings = meetings.filter(m => 
     m.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+   const handleDelete = async (id: string) => {
+      if (deletingId) return;
+      const confirmed = window.confirm("Bạn có chắc muốn xóa cuộc họp này?");
+      if (!confirmed) return;
+
+      setDeletingId(id);
+      try {
+         const response = await fetch(`/api/meetings/${id}`, { method: "DELETE" });
+         if (!response.ok) {
+            throw new Error("Failed to delete meeting");
+         }
+         setMeetings((prev) => prev.filter((m) => m.id !== id));
+      } catch (error) {
+         console.error("Failed to delete meeting:", error);
+         alert("Không thể xóa cuộc họp. Vui lòng thử lại.");
+      } finally {
+         setDeletingId(null);
+      }
+   };
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:p-10 hide-scrollbar flex flex-col gap-8 h-full">
@@ -135,8 +156,19 @@ export default function MeetingsPage() {
                                  {item.status}
                               </span>
                            </td>
-                           <td className="px-8 py-5 text-right text-foreground/30">
-                              <button className="hover:text-foreground transition-colors p-2"><MoreHorizontal size={16} /></button>
+                           <td className="px-8 py-5 text-right">
+                              <button
+                                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 hover:text-red-300 hover:border-red-400 transition-colors disabled:opacity-60"
+                                 onClick={() => handleDelete(item.id)}
+                                 disabled={deletingId === item.id}
+                              >
+                                 {deletingId === item.id ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                 ) : (
+                                    <Trash2 size={16} />
+                                 )}
+                                 <span>Xóa</span>
+                              </button>
                            </td>
                         </tr>
                      ))}

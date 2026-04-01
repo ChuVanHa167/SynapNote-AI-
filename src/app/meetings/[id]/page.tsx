@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Clock, Loader2, ArrowLeft } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { AudioPlayer } from '@/components/meetings/AudioPlayer';
 import { TranscriptView } from '@/components/meetings/TranscriptView';
 import { AIIntelligencePanel } from '@/components/meetings/AIIntelligencePanel';
@@ -17,11 +17,11 @@ interface MeetingDetail {
   transcript: string;
   decisions: string[];
   action_items: any[];
+  audio_url?: string | null;
 }
 
 export default function MeetingDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const id = params.id as string;
   
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
@@ -29,25 +29,33 @@ export default function MeetingDetailPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0); 
   const [currentTime, setCurrentTime] = useState(0); 
+  const [durationSeconds, setDurationSeconds] = useState(0);
+  const [volume, setVolume] = useState(0.66);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [isReloadingTranscript, setIsReloadingTranscript] = useState(false);
+  const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const fetchDetail = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent;
+    if (!silent) setIsLoading(true);
+    try {
+      const response = await fetch(`/api/meetings/${id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setMeeting(data);
+        setTasks(data.action_items || []);
+      } else {
+        console.error("Meeting not found");
+      }
+    } catch (error) {
+      console.error("Failed to fetch meeting detail:", error);
+    } finally {
+      if (!silent) setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchDetail = async () => {
-      try {
-        const response = await fetch(`http://localhost:8000/meetings/${id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setMeeting(data);
-          setTasks(data.action_items || []);
-        } else {
-           console.error("Meeting not found");
-        }
-      } catch (error) {
-        console.error("Failed to fetch meeting detail:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     if (id) fetchDetail();
   }, [id]);
 
@@ -76,10 +84,64 @@ export default function MeetingDetailPage() {
     return `${m}:${s}`;
   };
 
+  const syncProgress = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const current = audio.currentTime;
+    const dur = audio.duration || durationSeconds || 1;
+    setCurrentTime(Math.floor(current));
+    setDurationSeconds(isNaN(dur) ? 0 : Math.floor(dur));
+    setProgress(Math.min(100, (current / dur) * 100));
+  };
+
+  const handlePlayPause = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const handleSeek = (value: number) => {
+    const audio = audioRef.current;
+    if (!audio || !durationSeconds) return;
+    const target = (value / 100) * (audio.duration || durationSeconds);
+    audio.currentTime = target;
+    setCurrentTime(Math.floor(target));
+    setProgress(value);
+  };
+
+  const handleVolumeChange = (value: number) => {
+    setVolume(value);
+    if (audioRef.current) {
+      audioRef.current.volume = value;
+    }
+  };
+
   const handleTranscriptClick = (seconds: number) => {
-    setCurrentTime(seconds);
+    if (!Number.isFinite(seconds) || seconds < 0) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const dur = durationSeconds || audio.duration;
+    if (!Number.isFinite(dur) || dur <= 0) return;
+
+    const clamped = Math.min(seconds, dur);
+    audio.currentTime = clamped;
+    setCurrentTime(Math.floor(clamped));
+    setProgress((clamped / dur) * 100);
+    audio.play();
     setIsPlaying(true);
-    setProgress((seconds / 150) * 100); 
+  };
+
+  const handleReloadTranscript = async () => {
+    setIsReloadingTranscript(true);
+    await fetchDetail({ silent: true });
+    setIsReloadingTranscript(false);
   };
 
   const toggleTask = (taskId: string) => {
@@ -106,17 +168,33 @@ export default function MeetingDetailPage() {
         </div>
 
         <AudioPlayer 
-          isPlaying={isPlaying} 
-          onPlayPause={() => setIsPlaying(!isPlaying)}
-          progress={progress}
-          currentTime={formatTime(currentTime)}
-          duration={meeting.duration}
+            isPlaying={isPlaying} 
+            onPlayPause={handlePlayPause}
+            onSeek={handleSeek}
+            progress={progress}
+            currentTime={formatTime(currentTime)}
+            duration={durationSeconds ? formatTime(Math.max(durationSeconds - currentTime, 0)) : meeting.duration}
+            volume={volume}
+            onVolumeChange={handleVolumeChange}
         />
+
+          <audio
+            ref={audioRef}
+            src={meeting.audio_url || undefined}
+            onTimeUpdate={syncProgress}
+            onLoadedMetadata={syncProgress}
+            onEnded={() => setIsPlaying(false)}
+            className="hidden"
+          />
 
         <TranscriptView 
           transcript={transcriptLines as any}
           currentTimeSeconds={currentTime}
           onLineClick={handleTranscriptClick}
+          onReload={handleReloadTranscript}
+          reloading={isReloadingTranscript}
+          expanded={isTranscriptExpanded}
+          onToggleExpand={() => setIsTranscriptExpanded((v) => !v)}
         />
       </div>
 

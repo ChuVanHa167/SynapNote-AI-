@@ -36,28 +36,33 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      
-      // Send user's typed title if provided, else it will default in backend
+
       if (title.trim() !== '') {
           formData.append("title", title);
       }
 
-      const response = await fetch("http://localhost:8000/meetings/upload", {
+      console.log("Uploading file:", selectedFile.name, "Size:", selectedFile.size);
+
+      const response = await fetch("/api/meetings/upload", {
         method: "POST",
         body: formData,
       });
 
+      console.log("Response status:", response.status, response.ok);
+
       if (!response.ok) {
-        throw new Error("Lỗi khi tải file lên máy chủ");
+        const errorText = await response.text();
+        console.error("Backend error:", errorText);
+        throw new Error(`Lỗi ${response.status}: ${errorText || "Không rõ lỗi"}`);
       }
 
       const data = await response.json();
       console.log("Upload Success:", data);
 
-      router.push(`/meetings`); 
-    } catch (error) {
-      console.error(error);
-      alert("Tải lên thất bại. Vui lòng kiểm tra lại kết nối Backend.");
+      router.push(`/meetings`);
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      alert(`Tải lên thất bại: ${error.message || "Vui lòng kiểm tra lại kết nối Backend."}`);
     } finally {
       setIsUploading(false);
     }
