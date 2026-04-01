@@ -4,10 +4,13 @@ import requests
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from dotenv import load_dotenv
 from app.models.schemas import ChatRequest, ChatMessage, Meeting
 from app.database import get_db
 from app.repositories.sql_repos import SqlMeetingRepository
 from app.services.ai_bridge_service import AIBridgeService
+
+load_dotenv()
 
 router = APIRouter(prefix="/chat", tags=["ai-chat"])
 
@@ -83,12 +86,17 @@ def _call_gemini_api(message: str, context: str, system_instruction: Optional[st
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
 
     try:
-        resp = requests.post(url, json=payload, timeout=30)
+        resp = requests.post(url, json=payload, timeout=60)
         if resp.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"Gemini API error: {resp.status_code}")
+            raise HTTPException(status_code=500, detail=f"Gemini API error: {resp.status_code} - {resp.text[:200]}")
 
         data = resp.json()
+        if not data.get("candidates") or len(data["candidates"]) == 0:
+            raise HTTPException(status_code=500, detail="Gemini API returned no candidates")
+
         return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=504, detail="Gemini API timeout - Vui long thu lai")
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Gemini API request failed: {str(e)}")
     except (KeyError, IndexError) as e:

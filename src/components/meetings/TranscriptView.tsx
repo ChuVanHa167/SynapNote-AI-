@@ -44,14 +44,14 @@ export function TranscriptView({ transcript, currentTimeSeconds, onLineClick, on
         {transcript.map((line) => {
           const isActive = currentTimeSeconds >= line.seconds && currentTimeSeconds < line.seconds + 15;
           return (
-            <div 
-              key={line.id} 
+            <div
+              key={line.id}
               id={`transcript-line-${line.id}`}
               onClick={() => onLineClick(line.seconds)}
-              className={`flex gap-6 p-4 rounded-2xl cursor-pointer transition-all duration-500 group hover:pl-6 ${
-                isActive 
-                  ? 'bg-accent/5 border border-accent/20 shadow-[inset_4px_0_0_rgba(212,175,55,1)] scale-[1.02] transform-gpu' 
-                  : 'hover:bg-card/40 border border-transparent opacity-60 hover:opacity-100'
+              className={`flex gap-6 p-4 rounded-2xl cursor-pointer transition-all duration-500 ${
+                isActive
+                  ? 'bg-accent/5 border border-accent/20 shadow-[inset_4px_0_0_rgba(212,175,55,1)]'
+                  : 'border border-transparent opacity-60'
               }`}
               ref={(el) => {
                 if (isActive && el) {
@@ -59,7 +59,7 @@ export function TranscriptView({ transcript, currentTimeSeconds, onLineClick, on
                 }
               }}
             >
-              <div className={`text-xs font-mono mt-1 min-w-[45px] transition-colors duration-500 ${isActive ? 'text-accent' : 'text-foreground/30 group-hover:text-foreground/90'}`}>
+              <div className="text-xs font-mono mt-1 min-w-[45px] text-foreground/30">
                 {line.time}
               </div>
               <div>

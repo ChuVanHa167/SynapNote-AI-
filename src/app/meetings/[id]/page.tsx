@@ -96,7 +96,7 @@ export default function MeetingDetailPage() {
 
   const handlePlayPause = () => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !meeting.audio_url) return;
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
@@ -108,7 +108,7 @@ export default function MeetingDetailPage() {
 
   const handleSeek = (value: number) => {
     const audio = audioRef.current;
-    if (!audio || !durationSeconds) return;
+    if (!audio || !meeting.audio_url || !durationSeconds) return;
     const target = (value / 100) * (audio.duration || durationSeconds);
     audio.currentTime = target;
     setCurrentTime(Math.floor(target));
@@ -123,7 +123,7 @@ export default function MeetingDetailPage() {
   };
 
   const handleTranscriptClick = (seconds: number) => {
-    if (!Number.isFinite(seconds) || seconds < 0) return;
+    if (!Number.isFinite(seconds) || seconds < 0 || !meeting.audio_url) return;
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -200,11 +200,12 @@ export default function MeetingDetailPage() {
 
       {/* RIGHT COLUMN: AI Intelligence Panel (40%) */}
       <div className="w-full xl:w-[40%] flex flex-col h-full animate-in fade-in slide-in-from-right-8 duration-700 delay-500 fill-mode-both">
-         <AIIntelligencePanel 
+         <AIIntelligencePanel
             summary={meeting.summary || "Đang tạo tóm tắt..."}
             decisions={meeting.decisions || []}
             actionItems={tasks}
             onToggleTask={toggleTask}
+            meetingId={id}
          />
       </div>
 
