@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { Clock, Loader2, ArrowLeft } from 'lucide-react';
+import { Clock, Loader2, ArrowLeft, Link2, ExternalLink } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { AudioPlayer } from '@/components/meetings/AudioPlayer';
 import { TranscriptView } from '@/components/meetings/TranscriptView';
@@ -13,11 +13,14 @@ interface MeetingDetail {
   title: string;
   date: string;
   duration: string;
+  status: string;
   summary: string;
   transcript: string;
   decisions: string[];
   action_items: any[];
   audio_url?: string | null;
+  video_url?: string | null;
+  link_url?: string | null;
 }
 
 export default function MeetingDetailPage() {
@@ -34,6 +37,7 @@ export default function MeetingDetailPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [isReloadingTranscript, setIsReloadingTranscript] = useState(false);
   const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const fetchDetail = async (options?: { silent?: boolean }) => {
@@ -191,6 +195,19 @@ export default function MeetingDetailPage() {
               <span>Thời lượng: {meeting.duration}</span>
            </div>
            <h1 className="text-3xl lg:text-4xl font-light tracking-tight text-foreground/90">{meeting.title}</h1>
+           {/* Meeting Link */}
+           {meeting.link_url && (
+             <a
+               href={meeting.link_url}
+               target="_blank"
+               rel="noopener noreferrer"
+               className="mt-3 inline-flex items-center gap-2 text-sm text-accent hover:text-accent/80 transition-colors group"
+             >
+               <Link2 size={16} />
+               <span className="truncate max-w-md">{meeting.link_url}</span>
+               <ExternalLink size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+             </a>
+           )}
         </div>
 
         <AudioPlayer 
@@ -202,14 +219,21 @@ export default function MeetingDetailPage() {
             duration={durationSeconds ? formatTime(Math.max(durationSeconds - currentTime, 0)) : meeting.duration}
             volume={volume}
             onVolumeChange={handleVolumeChange}
+            disabled={!meeting.audio_url || !!audioError}
+            error={audioError}
         />
 
           <audio
             ref={audioRef}
-            src={meeting.audio_url || undefined}
+            src={`/api/meetings/${id}/stream`}
             onTimeUpdate={syncProgress}
             onLoadedMetadata={syncProgress}
             onEnded={() => setIsPlaying(false)}
+            onError={(e) => {
+              console.error('Audio error:', e);
+              setAudioError('Không thể tải audio. File có thể đang được xử lý hoặc không khả dụng.');
+              setIsPlaying(false);
+            }}
             className="hidden"
           />
 

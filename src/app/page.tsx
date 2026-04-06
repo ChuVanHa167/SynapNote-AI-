@@ -1,6 +1,7 @@
 "use client";
 
-import { FileVideo, Clock, Sparkles, MoveUpRight, MoreHorizontal, ArrowRight, Loader2 } from 'lucide-react';
+import { useUser } from '@/context/UserContext';
+import { FileVideo, Clock, Sparkles, ArrowRight, Loader2, Trash2, X, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
@@ -13,8 +14,38 @@ interface Meeting {
 }
 
 export default function Dashboard() {
+  const { user } = useUser();
+  const userName = user?.display_name || "Người dùng";
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (deletingId) return;
+
+    setDeletingId(id);
+    try {
+      const response = await fetch(`/api/meetings/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error("Failed to delete meeting");
+      }
+      setMeetings((prev) => prev.filter((m) => m.id !== id));
+      setDeleteConfirmId(null);
+      showToast("Xóa cuộc họp thành công!", "success");
+    } catch (error) {
+      console.error("Failed to delete meeting:", error);
+      showToast("Không thể xóa cuộc họp. Vui lòng thử lại.", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchMeetings = async () => {
@@ -46,6 +77,28 @@ export default function Dashboard() {
     }
   };
 
+  // Parse duration string (e.g., "5m 30s" or "0m 0s") to minutes
+  const parseDuration = (duration: string): number => {
+    if (!duration || duration === "0m 0s") return 0;
+    const minutesMatch = duration.match(/(\d+)\s*m/);
+    const secondsMatch = duration.match(/(\d+)\s*s/);
+    const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 0;
+    const seconds = secondsMatch ? parseInt(secondsMatch[1]) : 0;
+    return minutes + seconds / 60;
+  };
+
+  // Calculate total hours from all meetings
+  const totalHours = meetings.reduce((sum, meeting) => {
+    return sum + parseDuration(meeting.duration);
+  }, 0) / 60;
+
+  // Format hours (show 1 decimal place if less than 10, otherwise round to integer)
+  const formatHours = (hours: number): string => {
+    if (hours < 0.1) return "0h";
+    if (hours < 10) return `${hours.toFixed(1)}h`;
+    return `${Math.round(hours)}h`;
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:p-10 hide-scrollbar flex flex-col gap-10">
 
@@ -54,7 +107,7 @@ export default function Dashboard() {
          <div>
             <h1 className="text-3xl font-medium tracking-tight mb-2 flex items-center gap-3">
                 <span className="text-foreground/90">Chào buổi tối,</span>
-                <span className="font-semibold bg-gradient-to-r from-accent to-amber-200 bg-clip-text text-transparent">Alexander</span>
+                <span className="font-semibold bg-gradient-to-r from-accent to-amber-200 bg-clip-text text-transparent">{userName}</span>
             </h1>
             <p className="text-foreground/80 text-sm tracking-wide">Quản lý và xem lại tất cả cuộc họp của bạn.</p>
          </div>
@@ -69,8 +122,8 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150 fill-mode-both">
          {[
             { label: "Tổng cuộc họp", value: meetings.length.toString(), trend: "Real data", isUp: true, icon: FileVideo, color: "text-accent" },
-            { label: "Giờ tiết kiệm", value: "0h", trend: "-", isUp: true, icon: Clock, color: "text-emerald-400" },
-            { label: "Phân tích AI", value: "0", trend: "-", isUp: true, icon: Sparkles, color: "text-purple-400" },
+            { label: "Giờ tiết kiệm", value: formatHours(totalHours), trend: "Real data", isUp: true, icon: Clock, color: "text-emerald-400" },
+            { label: "Phân tích AI", value: meetings.filter(m => m.status === 'HOÀN THÀNH').length.toString(), trend: "Real data", isUp: true, icon: Sparkles, color: "text-purple-400" },
             { label: "Chờ xử lý", value: meetings.filter(m => m.status === 'ĐANG XỬ LÝ').length.toString(), trend: "Real time", isUp: false, icon: Clock, color: "text-amber-400" }
          ].map((stat, i) => (
             <div key={i} className="glass-panel rounded-2xl p-6 relative overflow-hidden group border border-border hover:border-accent/20 transition-colors">
@@ -131,8 +184,35 @@ export default function Dashboard() {
                                  {item.status}
                               </span>
                            </td>
-                           <td className="px-8 py-5 text-right text-foreground/30">
-                              <button className="hover:text-foreground transition-colors p-2"><MoreHorizontal size={16} /></button>
+                           <td className="px-8 py-5 text-right">
+                              {deleteConfirmId === item.id ? (
+                                 <div className="flex items-center gap-2 justify-end">
+                                    <span className="text-xs text-foreground/80">Bạn chắc chắn?</span>
+                                    <button
+                                       className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-xs font-medium"
+                                       onClick={() => handleDelete(item.id)}
+                                       disabled={deletingId === item.id}
+                                    >
+                                       {deletingId === item.id ? <Loader2 size={14} className="animate-spin" /> : "Xóa"}
+                                    </button>
+                                    <button
+                                       className="px-3 py-1.5 rounded-lg border border-border text-foreground/60 hover:text-foreground transition-colors text-xs"
+                                       onClick={() => setDeleteConfirmId(null)}
+                                       disabled={deletingId === item.id}
+                                    >
+                                       Hủy
+                                    </button>
+                                 </div>
+                              ) : (
+                                 <button
+                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 hover:text-red-300 hover:border-red-400 transition-colors"
+                                    onClick={() => setDeleteConfirmId(item.id)}
+                                    disabled={deletingId !== null}
+                                 >
+                                    <Trash2 size={16} />
+                                    <span>Xóa</span>
+                                 </button>
+                              )}
                            </td>
                         </tr>
                      ))}
@@ -142,6 +222,18 @@ export default function Dashboard() {
             </div>
          </div>
       </section>
+
+      {/* Toast Notification */}
+      {toast && (
+         <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-2xl border shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-300 z-50 ${
+            toast.type === 'success'
+               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+               : 'bg-red-500/10 border-red-500/30 text-red-400'
+         }`}>
+            {toast.type === 'success' ? <CheckCircle size={20} /> : <X size={20} />}
+            <span className="text-sm font-medium">{toast.message}</span>
+         </div>
+      )}
 
     </div>
   );

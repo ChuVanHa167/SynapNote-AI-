@@ -16,7 +16,7 @@ interface AIIntelligencePanelProps {
   meetingId?: string;
 }
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8001';
 
 export function AIIntelligencePanel({ summary, decisions, actionItems, onToggleTask, meetingId }: AIIntelligencePanelProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'chat'>('summary');
