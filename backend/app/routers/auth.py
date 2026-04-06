@@ -66,10 +66,39 @@ async def upload_avatar(email: str, file: UploadFile = File(...), service: AuthS
         shutil.copyfileobj(file.file, buffer)
         
     # 2. Update user avatar_url in DB
-    avatar_url = f"http://localhost:8000/uploads/avatars/{file_name}"
+    avatar_url = f"http://localhost:8001/uploads/avatars/{file_name}"
     user = service.update_profile(email, UserProfileUpdate(avatar_url=avatar_url))
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
     return user
+
+@router.post("/logout")
+async def logout():
+    return {"message": "Successfully logged out"}
+
+# Theme endpoint for light/dark mode
+@router.post("/theme")
+async def update_theme(email: str, theme: str, service: AuthService = Depends(get_auth_service)):
+    """Update user theme preference ('dark' or 'light')"""
+    if theme not in ["dark", "light"]:
+        raise HTTPException(status_code=400, detail="Theme must be 'dark' or 'light'")
+    
+    from app.models.schemas import UserProfileUpdate
+    user = service.update_profile(email, UserProfileUpdate(theme=theme))
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"theme": theme, "message": "Theme updated successfully"}
+
+@router.get("/theme")
+async def get_theme(email: str, service: AuthService = Depends(get_auth_service)):
+    """Get user theme preference"""
+    user = service.get_profile(email)
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"theme": user.theme or "dark"}

@@ -19,7 +19,7 @@ interface ChatResponse {
   content: string;
 }
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8001';
 
 export default function AIChatPage() {
   const [messages, setMessages] = useState<Message[]>([

@@ -48,3 +48,16 @@ class AuthService:
             
         new_hashed = f"mock_hash_{update_data.new_password}"
         return self.user_repo.update(user.id, {"hashed_password": new_hashed})
+
+# Global auth service instance for helper functions
+_auth_service: AuthService = None
+
+def set_auth_service(service: AuthService):
+    global _auth_service
+    _auth_service = service
+
+def get_current_user_email(token: str = None) -> str:
+    """Get current user email from token or return default test user"""
+    # For demo/testing, return a default user
+    # In production, this would validate JWT token
+    return "admin@synapnote.com"

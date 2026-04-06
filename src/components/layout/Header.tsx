@@ -1,12 +1,40 @@
 "use client";
 
-import { Search, Menu, Bell, Loader2 } from 'lucide-react';
+import { Search, Menu, Bell, Loader2, LogOut, Sun, Moon } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { APP_CONFIG } from '@/config/constants';
+import { useUser } from '@/context/UserContext';
+import { useTheme } from '@/context/ThemeContext';
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const [isSearching, setIsSearching] = useState(false);
+  const router = useRouter();
+  const { user, logout } = useUser();
+  const { theme, toggleTheme } = useTheme();
+  const userName = user?.display_name || "Alexander";
+  const userTitle = user?.title || "Quản trị viên";
+  const avatarUrl = user?.avatar_url || `${APP_CONFIG.urls.defaultAvatarGenerator}?seed=Alex&backgroundColor=transparent`;
+
+  const handleLogout = async () => {
+    try {
+      // 1. Call backend logout
+      await fetch('http://localhost:8001/auth/logout', { method: 'POST' });
+      
+      // 2. Clear session cookie (Important for Middleware)
+      document.cookie = "synap_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+      
+      // 3. Clear global state & Redirect
+      logout();
+      router.push('/login');
+    } catch (error) {
+      console.error("Logout failed:", error);
+      document.cookie = "synap_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+      logout();
+      router.push('/login');
+    }
+  };
 
   return (
     <header className="h-24 px-8 lg:px-12 flex items-center justify-between w-full bg-background/40 backdrop-blur-[20px] sticky top-0 z-30 border-b border-border transition-all duration-300">
@@ -41,24 +69,46 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-6 lg:gap-8 min-w-max">
+      <div className="flex items-center gap-5 lg:gap-7 min-w-max">
         {/* Luxury Notification Bell */}
         <button className="relative text-foreground/80 hover:text-accent transition-colors p-2 group">
           <Bell size={20} strokeWidth={1.5} className="group-hover:scale-110 transition-transform" />
           <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full border-2 border-background shadow-[0_0_8px_rgba(212,175,55,0.8)]"></span>
         </button>
+
+        {/* Theme Toggle Button */}
+        <button 
+          onClick={toggleTheme}
+          className="relative text-foreground/80 hover:text-accent transition-colors p-2 group"
+          title={theme === 'dark' ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
+        >
+          {theme === 'dark' ? (
+            <Sun size={20} strokeWidth={1.5} className="group-hover:scale-110 transition-transform" />
+          ) : (
+            <Moon size={20} strokeWidth={1.5} className="group-hover:scale-110 transition-transform" />
+          )}
+        </button>
         
-        {/* Minimal User Avatar */}
-        <Link href="/login" title="Đăng xuất / Đăng nhập" className="flex items-center gap-4 pl-6 border-l border-border hover:opacity-80 transition-opacity">
+        {/* Minimal User Avatar & Info */}
+        <div className="flex items-center gap-4 pl-5 border-l border-border h-12">
           <div className="hidden md:flex flex-col items-end justify-center">
-            <span className="text-sm font-medium text-foreground/90 tracking-wide">Alexander</span>
-            <span className="text-[10px] text-accent font-semibold tracking-widest uppercase mt-0.5">Quản trị viên</span>
+            <span className="text-sm font-medium text-foreground/90 tracking-wide">{userName}</span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] text-accent font-semibold tracking-widest uppercase">{userTitle}</span>
+              <button 
+                onClick={handleLogout}
+                className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase tracking-tighter transition-colors flex items-center gap-1 group/logout"
+              >
+                <LogOut size={10} className="group-hover/logout:-translate-x-0.5 transition-transform" />
+                Đăng xuất
+              </button>
+            </div>
           </div>
-          <div className="w-10 h-10 rounded-full cursor-pointer hover:scale-105 transition-transform overflow-hidden border border-white/10 relative p-0.5">
+          <Link href="/settings" className="w-10 h-10 rounded-full cursor-pointer hover:scale-105 transition-transform overflow-hidden border border-white/10 relative p-0.5">
             <div className="absolute inset-0 bg-gradient-to-tr from-accent/40 to-transparent opacity-50"></div>
-            <img src={`${APP_CONFIG.urls.defaultAvatarGenerator}?seed=Alex&backgroundColor=transparent`} alt="Avatar" className="w-full h-full object-cover rounded-full bg-[#1F1F22] z-10 relative" />
-          </div>
-        </Link>
+            <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover rounded-full bg-[#1F1F22] z-10 relative" />
+          </Link>
+        </div>
       </div>
     </header>
   );

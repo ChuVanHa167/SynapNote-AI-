@@ -7,6 +7,7 @@ import json
 import math
 import shutil
 import tempfile
+import subprocess
 from typing import Any, Dict, List, Optional
 
 from app.models.schemas import Meeting
@@ -66,11 +67,21 @@ def _extract_first_sentences(text: str, limit: int = 3) -> List[str]:
 
 
 def _ensure_ffmpeg_on_path() -> bool:
-    """Ensure ffmpeg and ffprobe are available for ffmpeg-python on Windows."""
-    if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+    """Ensure ffmpeg is available for ffmpeg-python on Windows."""
+    if shutil.which("ffmpeg"):
         return True
 
     candidates: List[str] = []
+
+    # Check imageio_ffmpeg first (pip installed)
+    try:
+        import imageio_ffmpeg
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if ffmpeg_exe and os.path.exists(ffmpeg_exe):
+            ffmpeg_dir = os.path.dirname(ffmpeg_exe)
+            candidates.append(ffmpeg_dir)
+    except Exception:
+        pass
 
     env_bin = os.getenv("FFMPEG_BIN_DIR")
     if env_bin:
@@ -93,12 +104,11 @@ def _ensure_ffmpeg_on_path() -> bool:
 
     for directory in candidates:
         ffmpeg_exe = os.path.join(directory, "ffmpeg.exe")
-        ffprobe_exe = os.path.join(directory, "ffprobe.exe")
-        if os.path.exists(ffmpeg_exe) and os.path.exists(ffprobe_exe):
+        if os.path.exists(ffmpeg_exe):
             os.environ["PATH"] = f"{directory}{os.pathsep}{os.environ.get('PATH', '')}"
             break
 
-    return bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
+    return bool(shutil.which("ffmpeg"))
 
 
 class AIBridgeService:
@@ -122,7 +132,7 @@ class AIBridgeService:
         stt_config = STT_PROFILES[selected_profile]
 
         if not _ensure_ffmpeg_on_path():
-            return "He thong chua tim thay ffmpeg/ffprobe de xu ly audio."
+            return "He thong chua tim thay ffmpeg de xu ly audio."
 
         try:
             from ai.stt_test import clean_text, convert_audio, transcribe
@@ -214,14 +224,36 @@ class AIBridgeService:
 
     # === New: Groq STT + Gemini summary pipeline ===
     def _probe_duration_seconds(self, input_audio_path: str) -> float:
+        """Get audio duration using ffmpeg (no ffprobe needed)."""
         try:
-            import ffmpeg  # type: ignore
-
-            probe = ffmpeg.probe(input_audio_path)
-            duration = float(probe["format"].get("duration", 0))
-            return duration if not math.isnan(duration) else 0.0
+            # Use ffmpeg to get duration info from stderr
+            result = subprocess.run(
+                [self._get_ffmpeg_path(), "-i", input_audio_path],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = result.stderr or result.stdout or ""
+            
+            # Parse Duration: HH:MM:SS.ms from ffmpeg output
+            import re
+            match = re.search(r"Duration:\s*(\d+):(\d+):(\d+)\.(\d+)", output)
+            if match:
+                hours = int(match.group(1))
+                minutes = int(match.group(2))
+                seconds = int(match.group(3))
+                return float(hours * 3600 + minutes * 60 + seconds)
+        except Exception as e:
+            print(f"[AIBridgeService] Error probing duration: {e}")
+        return 0.0
+    
+    def _get_ffmpeg_path(self) -> str:
+        """Get ffmpeg path from imageio_ffmpeg or system."""
+        try:
+            import imageio_ffmpeg
+            return imageio_ffmpeg.get_ffmpeg_exe()
         except Exception:
-            return 0.0
+            return "ffmpeg"
 
     def _get_chunk_seconds(self, override: Optional[int] = None) -> int:
         env_val = os.getenv("CHUNK_SECONDS") or os.getenv("CHUNK_SECS")
@@ -233,33 +265,40 @@ class AIBridgeService:
         return max(30, effective)  # clamp to minimum 30s to avoid too many calls
 
     def _chunk_audio(self, input_audio_path: str, chunk_seconds: int) -> List[str]:
-        if not _ensure_ffmpeg_on_path():
-            raise RuntimeError("ffmpeg/ffprobe not found for chunking")
-
-        try:
-            import ffmpeg  # type: ignore
-        except ImportError as exc:
-            raise RuntimeError("ffmpeg-python is missing; install dependency") from exc
-
+        """Split audio into chunks using ffmpeg subprocess."""
         duration = self._probe_duration_seconds(input_audio_path)
         if duration <= 0:
             raise RuntimeError("Cannot read audio duration for chunking")
 
         chunk_dir = tempfile.mkdtemp(prefix="sn_chunk_")
         chunks: List[str] = []
+        ffmpeg_path = self._get_ffmpeg_path()
 
         start = 0.0
         idx = 0
         while start < duration:
             out_path = os.path.join(chunk_dir, f"chunk_{idx:04d}.mp3")
             clip_length = min(chunk_seconds, duration - start)
-            (
-                ffmpeg
-                .input(input_audio_path, ss=start, t=clip_length)
-                .output(out_path, acodec="libmp3lame", ar=16000, ac=1, vn=None, loglevel="error")
-                .overwrite_output()
-                .run()
-            )
+            
+            cmd = [
+                ffmpeg_path,
+                "-i", input_audio_path,
+                "-ss", str(start),
+                "-t", str(clip_length),
+                "-vn",
+                "-acodec", "libmp3lame",
+                "-ar", "16000",
+                "-ac", "1",
+                "-loglevel", "error",
+                "-y",
+                out_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"[AIBridgeService] Chunk {idx} failed: {result.stderr}")
+                break
+                
             chunks.append(out_path)
             start += clip_length
             idx += 1

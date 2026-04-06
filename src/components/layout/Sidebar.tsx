@@ -46,7 +46,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           <div className="px-4 mb-8">
             <div className="relative inline-flex overflow-hidden rounded-xl p-[1px] group shadow-[0_0_20px_rgba(212,175,55,0.1)]">
               <span className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,#D4AF37_50%,transparent_100%)] opacity-80 group-hover:opacity-100 transition-opacity" />
-              <div className="inline-flex h-full w-full items-center justify-center rounded-xl bg-background px-6 py-2.5 text-xs font-bold text-white uppercase tracking-[0.25em] backdrop-blur-3xl">
+              <div className="inline-flex h-full w-full items-center justify-center rounded-xl bg-background px-6 py-2.5 text-xs font-bold text-foreground uppercase tracking-[0.25em] backdrop-blur-3xl">
                 Menu
               </div>
             </div>

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from app.routers import auth, meetings, chat, integrations
+from app.routers import auth, meetings, chat, integrations, billing
 
 app = FastAPI(
     title="SynapNote AI Backend",
@@ -37,6 +37,7 @@ app.include_router(auth.router)
 app.include_router(meetings.router)
 app.include_router(chat.router)
 app.include_router(integrations.router)
+app.include_router(billing.router)
 
 # Mount static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -46,4 +47,4 @@ async def root():
     return {"message": "SynapNote AI API is running. Go to /docs for Swagger UI."}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)     
