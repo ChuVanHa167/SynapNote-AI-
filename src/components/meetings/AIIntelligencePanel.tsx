@@ -69,8 +69,16 @@ export function AIIntelligencePanel({ summary, decisions, actionItems, onToggleT
         setChatMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
         setLastFailedMessage(null);
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.detail || 'Không thể kết nối với server AI';
+            const rawError = await response.text();
+            const errorData = (() => {
+               try {
+                  return JSON.parse(rawError || '{}');
+               } catch {
+                  return {};
+               }
+            })();
+            const fallbackError = rawError?.trim() ? rawError.trim().slice(0, 220) : 'Không thể kết nối với server AI';
+            const errorMsg = errorData.detail || fallbackError;
         setChatMessages(prev => [...prev, {
           role: 'assistant',
           content: `Có lỗi xảy ra: ${errorMsg}`,
