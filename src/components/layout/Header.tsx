@@ -8,6 +8,8 @@ import { APP_CONFIG } from '@/config/constants';
 import { useUser } from '@/context/UserContext';
 import { useTheme } from '@/context/ThemeContext';
 
+const API_BASE_URL = '/api';
+
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const [isSearching, setIsSearching] = useState(false);
   const router = useRouter();
@@ -20,7 +22,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const handleLogout = async () => {
     try {
       // 1. Call backend logout
-      await fetch('http://localhost:8001/auth/logout', { method: 'POST' });
+      await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST' });
       
       // 2. Clear session cookie (Important for Middleware)
       document.cookie = "synap_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";

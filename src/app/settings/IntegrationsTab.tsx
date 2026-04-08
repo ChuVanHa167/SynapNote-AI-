@@ -12,6 +12,8 @@ interface Integration {
   status: string;
 }
 
+const API_BASE_URL = '/api';
+
 export function IntegrationsTab({ userId }: { userId?: string }) {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,7 +26,7 @@ export function IntegrationsTab({ userId }: { userId?: string }) {
 
   const fetchIntegrations = async () => {
     try {
-      const response = await fetch(`http://localhost:8001/integrations/available?user_id=${userId}`);
+      const response = await fetch(`${API_BASE_URL}/integrations/available?user_id=${userId}`);
       if (!response.ok) throw new Error('Failed to fetch integrations');
       const data = await response.json();
       setIntegrations(data);
@@ -39,7 +41,7 @@ export function IntegrationsTab({ userId }: { userId?: string }) {
     setConnecting(provider);
     try {
       // Get OAuth URL
-      const response = await fetch(`http://localhost:8001/integrations/auth-url/${provider}?user_id=${userId}`);
+      const response = await fetch(`${API_BASE_URL}/integrations/auth-url/${provider}?user_id=${userId}`);
       if (response.ok) {
         const { auth_url } = await response.json();
         // Open OAuth window
@@ -56,7 +58,7 @@ export function IntegrationsTab({ userId }: { userId?: string }) {
     if (!confirm(`Ngắt kết nối với ${provider}?`)) return;
     
     try {
-      const response = await fetch(`http://localhost:8001/integrations/disconnect/${provider}?user_id=${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/integrations/disconnect/${provider}?user_id=${userId}`, {
         method: 'POST'
       });
       

@@ -45,6 +45,8 @@ interface BillingData {
   }>;
 }
 
+const API_BASE_URL = '/api';
+
 export function BillingTab({ userId }: { userId?: string }) {
   const [data, setData] = useState<BillingData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,7 +61,7 @@ export function BillingTab({ userId }: { userId?: string }) {
 
   const fetchBillingData = async () => {
     try {
-      const response = await fetch(`http://localhost:8001/billing/dashboard?user_id=${userId}`);
+      const response = await fetch(`${API_BASE_URL}/billing/dashboard?user_id=${userId}`);
       if (!response.ok) throw new Error('Failed to fetch billing data');
       const billingData = await response.json();
       setData(billingData);
@@ -76,7 +78,7 @@ export function BillingTab({ userId }: { userId?: string }) {
     
     setCancelling(true);
     try {
-      const response = await fetch('http://localhost:8001/billing/cancel', {
+      const response = await fetch(`${API_BASE_URL}/billing/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, cancel_at_period_end: true })
@@ -95,7 +97,7 @@ export function BillingTab({ userId }: { userId?: string }) {
 
   const handleSubscribe = async (planId: string) => {
     try {
-      const response = await fetch(`http://localhost:8001/billing/subscribe/${planId}?user_id=${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/billing/subscribe/${planId}?user_id=${userId}`, {
         method: 'POST'
       });
       

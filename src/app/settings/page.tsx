@@ -7,6 +7,8 @@ import { useUser } from '@/context/UserContext';
 import { BillingTab } from './BillingTab';
 import { IntegrationsTab } from './IntegrationsTab';
 
+const API_BASE_URL = '/api';
+
 type Tab = 'profile' | 'notifications' | 'security' | 'billing' | 'integrations';
 
 export default function SettingsPage() {
@@ -67,7 +69,7 @@ export default function SettingsPage() {
       formData.append('file', file);
 
       try {
-         const response = await fetch(`http://localhost:8001/auth/upload-avatar?email=${user.email}`, {
+         const response = await fetch(`${API_BASE_URL}/auth/upload-avatar?email=${user.email}`, {
             method: 'POST',
             body: formData,
          });
@@ -119,7 +121,7 @@ export default function SettingsPage() {
                action_item_alerts: actionItemAlerts,
                product_updates: productUpdates,
             };
-            response = await fetch(`http://localhost:8001/auth/profile?email=${user.email}`, {
+            response = await fetch(`${API_BASE_URL}/auth/profile?email=${user.email}`, {
                method: 'PUT',
                headers: { 'Content-Type': 'application/json' },
                body: JSON.stringify(body),
@@ -129,7 +131,7 @@ export default function SettingsPage() {
                current_password: currentPassword,
                new_password: newPassword,
             };
-            response = await fetch(`http://localhost:8001/auth/password?email=${user.email}`, {
+            response = await fetch(`${API_BASE_URL}/auth/password?email=${user.email}`, {
                method: 'PUT',
                headers: { 'Content-Type': 'application/json' },
                body: JSON.stringify(body),

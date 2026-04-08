@@ -122,6 +122,27 @@ export default function Home() {
     jobId: null as string | null,
   });
 
+  const buildSafeUploadFilename = useCallback((originalName: string) => {
+    const dotIndex = originalName.lastIndexOf('.');
+    const base = dotIndex > 0 ? originalName.slice(0, dotIndex) : originalName;
+    const ext = dotIndex > 0 ? originalName.slice(dotIndex) : '';
+
+    const safeBase = base
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+
+    const safeExt = ext
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9.]/g, '');
+
+    const fallbackBase = `upload_${Date.now()}`;
+    return `${safeBase || fallbackBase}${safeExt}`;
+  }, []);
+
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeJobIdRef = useRef<string | null>(null);
@@ -272,7 +293,8 @@ export default function Home() {
     
     try {
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      const safeFilename = buildSafeUploadFilename(selectedFile.name);
+      formData.append("file", selectedFile, safeFilename);
       if (title.trim()) formData.append("title", title);
 
       const response = await fetch("/api/meetings/upload", {
