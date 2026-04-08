@@ -12,5 +12,7 @@ ffmpeg-python
 imageio-ffmpeg>=0.4.9
 faster-whisper
 requests
+yt-dlp>=2025.1.0
 b2sdk>=1.20.0
 moviepy>=1.0.3
+minio>=7.2.7

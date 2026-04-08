@@ -28,6 +28,17 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 const DEFAULT_EMAIL = "admin@synapnote.com";
 const API_BASE_URL = "/api";
 
+const buildFallbackUser = (): UserProfile => ({
+  id: "dev-admin",
+  email: DEFAULT_EMAIL,
+  display_name: "Admin User",
+  title: "Administrator",
+  avatar_url: `${APP_CONFIG.urls.defaultAvatarGenerator}?seed=Admin%20User&backgroundColor=transparent`,
+  email_summaries: true,
+  action_item_alerts: true,
+  product_updates: false,
+});
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,10 +50,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         setUser(data);
       } else {
-        console.error("Failed to fetch user profile");
+        setUser(buildFallbackUser());
       }
     } catch (error) {
-      console.error("Error fetching user profile:", error);
+      setUser(buildFallbackUser());
     } finally {
       setLoading(false);
     }

@@ -50,7 +50,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchMeetings = async () => {
       try {
-        const response = await fetch("/api/meetings");
+      const response = await fetch("/api/meetings");
         if (response.ok) {
           const data = await response.json();
           setMeetings(data);

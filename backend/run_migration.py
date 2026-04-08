@@ -1,8 +1,10 @@
+from pathlib import Path
+
 from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 # Adjusting to backend directory if running from root, or assume running from backend
 DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://root:@localhost:3306/synapnote_ai")
 

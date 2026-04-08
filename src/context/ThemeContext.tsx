@@ -13,6 +13,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const STORAGE_KEY = "synapnote-theme";
+const DEFAULT_EMAIL = "admin@synapnote.com";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
@@ -60,10 +61,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const hasSession = document.cookie.includes("synap_session");
       if (!hasSession) return;
 
-      await fetch("/api/users/theme", {
+      await fetch(`/api/auth/theme?email=${DEFAULT_EMAIL}&theme=${newTheme}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme: newTheme }),
       });
     } catch (error) {
       // Silent fail - localStorage is the source of truth

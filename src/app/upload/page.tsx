@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { UploadCloud, AudioLines, Type, Clock, FileVideo, Link2, Globe, X, Loader2 } from 'lucide-react';
+import { UploadCloud, AudioLines, Type, Clock, FileVideo, Globe, X, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 // Progress Bar Component
@@ -105,7 +105,6 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<'file' | 'url'>('file');
   const [urlInput, setUrlInput] = useState('');
@@ -123,11 +122,132 @@ export default function Home() {
     jobId: null as string | null,
   });
 
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeJobIdRef = useRef<string | null>(null);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollFailureCountRef = useRef(0);
+
+  const stopTracking = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+    }
+
+    pollFailureCountRef.current = 0;
+  }, []);
+
+  const applyProgressUpdate = useCallback((jobId: string, data: any) => {
+    if (activeJobIdRef.current !== jobId) return;
+
+    setUploadProgress({
+      progress: Number(data.progress ?? 0),
+      status: String(data.status || 'pending'),
+      message: String(data.message || ''),
+      totalBytes: Number(data.total_bytes ?? 0),
+      downloadedBytes: Number(data.downloaded_bytes ?? 0),
+      uploadedBytes: Number(data.uploaded_bytes ?? 0),
+      error: data.error ? String(data.error) : undefined,
+      jobId,
+    });
+
+    if (data.status === 'completed') {
+      stopTracking();
+      setIsUploading(false);
+      redirectTimerRef.current = setTimeout(() => router.push(`/meetings`), 1500);
+      return;
+    }
+
+    if (data.status === 'error') {
+      stopTracking();
+      setIsUploading(false);
+    }
+  }, [router, stopTracking]);
+
+  const pollJobStatus = useCallback((jobId: string) => {
+    if (pollIntervalRef.current) return;
+
+    pollIntervalRef.current = setInterval(async () => {
+      if (activeJobIdRef.current !== jobId) {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/meetings/job-status/${jobId}`);
+        if (!response.ok) {
+          throw new Error(`status_${response.status}`);
+        }
+
+        pollFailureCountRef.current = 0;
+        const data = await response.json();
+        applyProgressUpdate(jobId, data);
+      } catch {
+        pollFailureCountRef.current += 1;
+        if (pollFailureCountRef.current >= 8) {
+          stopTracking();
+          setUploadProgress((prev) => ({
+            ...prev,
+            status: 'error',
+            error: 'Không thể lấy tiến độ xử lý. Vui lòng thử lại.',
+          }));
+          setIsUploading(false);
+        }
+      }
+    }, 1000);
+  }, [applyProgressUpdate, stopTracking]);
+
+  const startSSE = useCallback((jobId: string) => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const eventSource = new EventSource(`/api/meetings/upload-progress/${jobId}`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      try {
+        const progressData = JSON.parse(event.data);
+        applyProgressUpdate(jobId, progressData);
+      } catch {
+        // Ignore malformed chunk and rely on polling.
+      }
+    };
+
+    eventSource.onerror = () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      pollJobStatus(jobId);
+    };
+  }, [applyProgressUpdate, pollJobStatus]);
+
   useEffect(() => {
     setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      stopTracking();
+      activeJobIdRef.current = null;
+    };
+  }, [stopTracking]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -154,7 +274,6 @@ export default function Home() {
       const formData = new FormData();
       formData.append("file", selectedFile);
       if (title.trim()) formData.append("title", title);
-      if (linkUrl.trim()) formData.append("link_url", linkUrl);
 
       const response = await fetch("/api/meetings/upload", {
         method: "POST",
@@ -174,39 +293,16 @@ export default function Home() {
       }
       
       const job_id = data.job_id;
+      if (!job_id) {
+        throw new Error("Không nhận được mã tiến trình từ server");
+      }
+
+      activeJobIdRef.current = job_id;
       setUploadProgress(prev => ({ ...prev, jobId: job_id }));
-      
-      // Connect to SSE for progress updates
-      const eventSource = new EventSource(`/api/meetings/upload-progress/${job_id}`);
-      eventSource.onmessage = (event) => {
-        const progressData = JSON.parse(event.data);
-        setUploadProgress({
-          progress: progressData.progress, 
-          status: progressData.status, 
-          message: progressData.message,
-          totalBytes: progressData.total_bytes, 
-          downloadedBytes: progressData.downloaded_bytes,
-          uploadedBytes: progressData.uploaded_bytes, 
-          error: progressData.error, 
-          jobId: job_id,
-        });
-        
-        if (progressData.status === 'completed') {
-          eventSource.close();
-          setTimeout(() => router.push(`/meetings`), 1500);
-        }
-        
-        if (progressData.status === 'error') {
-          eventSource.close();
-          setIsUploading(false);
-        }
-      };
-      
-      eventSource.onerror = () => {
-        eventSource.close();
-        // Fallback to polling
-        pollJobStatus(job_id);
-      };
+
+      // Run polling and SSE together to avoid stuck loading when SSE is buffered by proxy.
+      pollJobStatus(job_id);
+      startSSE(job_id);
       
     } catch (error: any) {
       setUploadProgress(prev => ({ 
@@ -235,7 +331,6 @@ export default function Home() {
       const formData = new FormData();
       formData.append("file_url", urlInput);
       if (title.trim()) formData.append("title", title);
-      if (linkUrl.trim()) formData.append("link_url", linkUrl);
 
       const startResponse = await fetch("/api/meetings/upload-from-url", {
         method: "POST", body: formData,
@@ -243,53 +338,19 @@ export default function Home() {
       if (!startResponse.ok) throw new Error("Không thể bắt đầu upload");
 
       const { job_id } = await startResponse.json();
+      if (!job_id) {
+        throw new Error("Không nhận được mã tiến trình từ server");
+      }
+
+      activeJobIdRef.current = job_id;
       setUploadProgress(prev => ({ ...prev, jobId: job_id }));
 
-      const eventSource = new EventSource(`/api/meetings/upload-progress/${job_id}`);
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setUploadProgress({
-          progress: data.progress, status: data.status, message: data.message,
-          totalBytes: data.total_bytes, downloadedBytes: data.downloaded_bytes,
-          uploadedBytes: data.uploaded_bytes, error: data.error, jobId: job_id,
-        });
-        if (data.status === 'completed') {
-          eventSource.close();
-          setTimeout(() => router.push(`/meetings`), 1500);
-        }
-        if (data.status === 'error') {
-          eventSource.close();
-          setIsUploading(false);
-        }
-      };
-      eventSource.onerror = () => {
-        eventSource.close();
-        pollJobStatus(job_id);
-      };
+      pollJobStatus(job_id);
+      startSSE(job_id);
     } catch (error: any) {
       setUploadProgress(prev => ({ ...prev, status: 'error', error: error.message }));
       setIsUploading(false);
     }
-  };
-
-  const pollJobStatus = async (jobId: string) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/meetings/job-status/${jobId}`);
-        if (!response.ok) { clearInterval(pollInterval); return; }
-        const data = await response.json();
-        setUploadProgress({
-          progress: data.progress, status: data.status, message: data.message,
-          totalBytes: data.total_bytes, downloadedBytes: data.downloaded_bytes,
-          uploadedBytes: data.uploaded_bytes, error: data.error, jobId: jobId,
-        });
-        if (data.status === 'completed') {
-          clearInterval(pollInterval);
-          setTimeout(() => router.push(`/meetings`), 1500);
-        }
-        if (data.status === 'error') { clearInterval(pollInterval); setIsUploading(false); }
-      } catch { clearInterval(pollInterval); }
-    }, 1000);
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -305,6 +366,8 @@ export default function Home() {
   };
 
   const handleCancel = () => {
+    stopTracking();
+    activeJobIdRef.current = null;
     setSelectedFile(null);
     setUrlInput('');
     setUploadProgress({
@@ -340,18 +403,6 @@ export default function Home() {
                   type="text" id="meeting-title"
                   value={title} onChange={(e) => setTitle(e.target.value)}
                   placeholder="Ví dụ: Họp Sprint 4"
-                  className="w-full bg-background border border-border/80 rounded-xl px-4 py-3 text-sm outline-none focus:border-accent/60 transition-all text-foreground placeholder-foreground/30 shadow-inner"
-                  disabled={isUploading}
-               />
-           </div>
-
-           <div className="flex flex-col gap-2 mt-4">
-               <label htmlFor="meeting-link" className="text-sm text-foreground/70 font-medium ml-1 flex items-center gap-2">
-                 <Link2 size={14} className="text-accent" />
-                 Đường dẫn cuộc họp (tùy chọn)
-               </label>
-               <input type="url" id="meeting-link" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
-                  placeholder="https://zoom.us/j/123456789"
                   className="w-full bg-background border border-border/80 rounded-xl px-4 py-3 text-sm outline-none focus:border-accent/60 transition-all text-foreground placeholder-foreground/30 shadow-inner"
                   disabled={isUploading}
                />

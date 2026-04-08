@@ -1,16 +1,17 @@
+from pathlib import Path
+
 import os
-import json
+import time
 import requests
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from app.models.schemas import ChatRequest, ChatMessage, Meeting
 from app.database import get_db
 from app.repositories.sql_repos import SqlMeetingRepository
-from app.services.ai_bridge_service import AIBridgeService
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 router = APIRouter(prefix="/chat", tags=["ai-chat"])
 
@@ -21,6 +22,22 @@ def _get_gemini_api_key() -> str:
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
     return api_key
+
+def _get_gemini_model_candidates() -> List[str]:
+    primary = (os.getenv("GEMINI_MODEL") or GEMINI_MODEL).strip()
+    fallback_raw = os.getenv(
+        "GEMINI_FALLBACK_MODELS",
+        "gemini-flash-lite-latest,gemini-flash-lite-latest",
+    )
+
+    models: List[str] = []
+    for model in [primary] + [m.strip() for m in fallback_raw.split(",")]:
+        if model and model not in models:
+            models.append(model)
+    return models
+
+def _is_retryable_gemini_status(status_code: int) -> bool:
+    return status_code in {429, 500, 502, 503, 504}
 
 def _build_context_from_meetings(meetings: List[Meeting]) -> str:
     """Build context string from multiple meetings for Gemini."""
@@ -47,7 +64,7 @@ def _build_context_from_meetings(meetings: List[Meeting]) -> str:
             parts.append(f"Quyet dinh:\n{decisions}")
 
         if meeting.action_items:
-            actions = "\n".join([f"- {a.task} (assignee: {a.assignee}, status: {a.status})" for a in meeting.action_items])
+            actions = "\n".join([f"- {a.task} (nguoi_phu_trach: {a.assignee}, trang_thai: {a.status})" for a in meeting.action_items])
             parts.append(f"Hanh dong:\n{actions}")
 
         context_parts.append("\n".join(parts))
@@ -57,12 +74,15 @@ def _build_context_from_meetings(meetings: List[Meeting]) -> str:
 def _call_gemini_api(message: str, context: str, system_instruction: Optional[str] = None) -> str:
     """Call Gemini API for chat response."""
     api_key = _get_gemini_api_key()
+    max_retries_per_model = max(1, int(os.getenv("GEMINI_RETRY_PER_MODEL", "2")))
+    base_delay_seconds = max(0.2, float(os.getenv("GEMINI_RETRY_BASE_DELAY", "1.0")))
 
     system_prompt = system_instruction or (
-        "Ban la tro ly AI thong minh cho SynapNote. "
-        "Ban tra loi cau hoi cua nguoi dung dua tren nguoi du lieu cuoc hop duoc cung cap. "
-        "Tra loi bang tieng Viet tu nhien, de hieu. "
-        "Neu khong co du lieu trong nguoi duoc cung cap, hay noi cho nguoi dung biet."
+        "Ban la tro ly SynapNote toi uu cho Gemini Flash Lite. "
+        "Nhiem vu: tra loi cau hoi dua tren du lieu cuoc hop duoc cung cap. "
+        "Rang buoc bat buoc: luon tra loi bang tieng Viet, ngan gon, ro rang, dung trong tam. "
+        "Khong suy doan. Khong bia du lieu. "
+        "Neu nguon du lieu khong co thong tin de tra loi, phai noi ro phan thieu thay vi tu doan."
     )
 
     payload = {
@@ -70,37 +90,107 @@ def _call_gemini_api(message: str, context: str, system_instruction: Optional[st
             {
                 "parts": [
                     {
-                        "text": f"{system_prompt}\n\nNGUOI DU LIEU CUOC HOP:\n{context}\n\nCAU HOI NGUOI DUNG: {message}\n\nTRA LOI:"
+                        "text": (
+                            f"{system_prompt}\n\n"
+                            "DU LIEU CUOC HOP (nguon su that):\n"
+                            f"{context}\n\n"
+                            "CAU HOI NGUOI DUNG:\n"
+                            f"{message}\n\n"
+                            "Huong dan output: chi tra loi bang tieng Viet; "
+                            "co the dung gach dau dong neu can; khong can nhac lai prompt."
+                        )
                     }
                 ]
             }
         ],
         "generationConfig": {
-            "temperature": 0.7,
-            "topK": 40,
-            "topP": 0.95,
-            "maxOutputTokens": 1024,
+            "responseMimeType": "text/plain",
+            "temperature": 0.25,
+            "topK": 20,
+            "topP": 0.9,
+            "maxOutputTokens": 900,
         }
     }
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
+    last_retryable_error = ""
+    had_retryable_failure = False
 
-    try:
-        resp = requests.post(url, json=payload, timeout=60)
-        if resp.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"Gemini API error: {resp.status_code} - {resp.text[:200]}")
+    for model in _get_gemini_model_candidates():
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
-        data = resp.json()
-        if not data.get("candidates") or len(data["candidates"]) == 0:
-            raise HTTPException(status_code=500, detail="Gemini API returned no candidates")
+        for attempt in range(1, max_retries_per_model + 1):
+            try:
+                resp = requests.post(url, json=payload, timeout=60)
+            except requests.exceptions.Timeout:
+                had_retryable_failure = True
+                last_retryable_error = f"timeout on {model}"
+                if attempt < max_retries_per_model:
+                    time.sleep(base_delay_seconds * attempt)
+                continue
+            except requests.exceptions.RequestException as exc:
+                had_retryable_failure = True
+                last_retryable_error = f"request_error on {model}: {exc}"
+                if attempt < max_retries_per_model:
+                    time.sleep(base_delay_seconds * attempt)
+                continue
 
-        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except requests.exceptions.Timeout:
-        raise HTTPException(status_code=504, detail="Gemini API timeout - Vui long thu lai")
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API request failed: {str(e)}")
-    except (KeyError, IndexError) as e:
-        raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response: {str(e)}")
+            if resp.status_code != 200:
+                response_snippet = resp.text[:200]
+                if _is_retryable_gemini_status(resp.status_code):
+                    had_retryable_failure = True
+                    last_retryable_error = f"{resp.status_code} on {model}: {response_snippet}"
+                    if attempt < max_retries_per_model:
+                        time.sleep(base_delay_seconds * attempt)
+                        continue
+                    break
+                raise HTTPException(status_code=500, detail=f"Gemini API error: {resp.status_code} - {response_snippet}")
+
+            try:
+                data = resp.json()
+                candidates = data.get("candidates") or []
+                if not candidates:
+                    last_retryable_error = f"no candidates on {model}"
+                    had_retryable_failure = True
+                    if attempt < max_retries_per_model:
+                        time.sleep(base_delay_seconds * attempt)
+                        continue
+                    break
+
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if not parts:
+                    last_retryable_error = f"empty parts on {model}"
+                    had_retryable_failure = True
+                    if attempt < max_retries_per_model:
+                        time.sleep(base_delay_seconds * attempt)
+                        continue
+                    break
+
+                text = (parts[0].get("text") or "").strip()
+                if text:
+                    return text
+
+                last_retryable_error = f"empty text on {model}"
+                had_retryable_failure = True
+                if attempt < max_retries_per_model:
+                    time.sleep(base_delay_seconds * attempt)
+                    continue
+                break
+            except (ValueError, KeyError, IndexError, TypeError) as exc:
+                had_retryable_failure = True
+                last_retryable_error = f"parse_error on {model}: {exc}"
+                if attempt < max_retries_per_model:
+                    time.sleep(base_delay_seconds * attempt)
+                    continue
+                break
+
+    if had_retryable_failure:
+        print(f"[chat] Gemini temporary overload after retries: {last_retryable_error}")
+        return (
+            "He thong AI dang tam thoi qua tai nen chua tra loi duoc ngay luc nay. "
+            "Ban vui long thu lai sau 10-30 giay, hoac gui cau hoi ngan gon hon."
+        )
+
+    raise HTTPException(status_code=500, detail="Gemini API returned no valid response")
 
 @router.post("/query", response_model=ChatMessage)
 async def ask_assistant(request: ChatRequest, db: Session = Depends(get_db)):
@@ -110,7 +200,6 @@ async def ask_assistant(request: ChatRequest, db: Session = Depends(get_db)):
     Otherwise, all meetings are used as context.
     """
     repo = SqlMeetingRepository(db)
-    ai_service = AIBridgeService()
 
     # Get context meetings
     if request.meeting_id:

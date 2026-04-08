@@ -51,6 +51,8 @@ async def update_password(email: str, update_data: UserPasswordUpdate, service: 
 from fastapi import File, UploadFile
 import os
 import shutil
+import uuid
+from app.services.minio_storage import get_minio_storage
 
 @router.post("/upload-avatar")
 async def upload_avatar(email: str, file: UploadFile = File(...), service: AuthService = Depends(get_auth_service)):
@@ -64,9 +66,16 @@ async def upload_avatar(email: str, file: UploadFile = File(...), service: AuthS
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
-    # 2. Update user avatar_url in DB
-    avatar_url = f"http://localhost:8001/uploads/avatars/{file_name}"
+
+    # 2. Upload to MinIO when available (fallback to local URL)
+    avatar_url = f"http://localhost:8000/uploads/avatars/{file_name}"
+    minio_storage = get_minio_storage()
+    if minio_storage.is_configured():
+        object_name = f"avatars/{email.replace('@', '_').replace('.', '_')}_{uuid.uuid4().hex}{file_extension}"
+        uploaded_url = minio_storage.upload_file(file_path, object_name, file.content_type)
+        if uploaded_url:
+            avatar_url = uploaded_url
+
     user = service.update_profile(email, UserProfileUpdate(avatar_url=avatar_url))
     
     if not user:

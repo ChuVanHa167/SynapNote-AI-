@@ -1,12 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Clock, Loader2, ArrowLeft, Link2, ExternalLink } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { AudioPlayer } from '@/components/meetings/AudioPlayer';
 import { TranscriptView } from '@/components/meetings/TranscriptView';
 import { AIIntelligencePanel } from '@/components/meetings/AIIntelligencePanel';
 import Link from 'next/link';
+import { TranscriptLine } from '@/types/meeting';
+
+interface SpeakerTurn {
+  speaker: string;
+  start: number;
+  end: number;
+  text: string;
+}
 
 interface MeetingDetail {
   id: string;
@@ -21,7 +29,102 @@ interface MeetingDetail {
   audio_url?: string | null;
   video_url?: string | null;
   link_url?: string | null;
+  speaker_turns?: SpeakerTurn[];
 }
+
+const parseTimestampToSeconds = (value: string): number => {
+  const match = (value || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return 0;
+
+  const minutes = Number.parseInt(match[1], 10);
+  const seconds = Number.parseInt(match[2], 10);
+  if (Number.isNaN(minutes) || Number.isNaN(seconds)) return 0;
+  return Math.max(0, minutes * 60 + seconds);
+};
+
+const formatSecondsToTimestamp = (seconds: number): string => {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safe / 60).toString().padStart(2, '0');
+  const secs = (safe % 60).toString().padStart(2, '0');
+  return `${mins}:${secs}`;
+};
+
+const parseTranscriptLines = (meeting: MeetingDetail | null): TranscriptLine[] => {
+  if (!meeting) return [];
+
+  if (Array.isArray(meeting.speaker_turns) && meeting.speaker_turns.length > 0) {
+    return meeting.speaker_turns
+      .filter((turn) => !!turn?.text?.trim())
+      .map((turn, index) => {
+        const startSeconds = Math.max(0, Math.floor(Number(turn.start) || 0));
+        return {
+          id: String(index + 1),
+          time: formatSecondsToTimestamp(startSeconds),
+          seconds: startSeconds,
+          speaker: turn.speaker || `Speaker ${index + 1}`,
+          text: turn.text.trim(),
+        };
+      });
+  }
+
+  const transcript = (meeting.transcript || '').trim();
+  if (!transcript) return [];
+
+  const lines = transcript
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const diarizedLines = lines
+    .map((line, index) => {
+      const match = line.match(/^\[(.+?)\s*\|\s*(\d{1,2}:\d{2})(?:-\d{1,2}:\d{2})?\]\s*(.+)$/);
+      if (!match) return null;
+
+      const seconds = parseTimestampToSeconds(match[2]);
+      return {
+        id: String(index + 1),
+        time: match[2],
+        seconds,
+        speaker: match[1].trim(),
+        text: match[3].trim(),
+      } as TranscriptLine;
+    })
+    .filter((line): line is TranscriptLine => line !== null);
+
+  if (diarizedLines.length > 0) {
+    return diarizedLines;
+  }
+
+  const speakerPrefixLines = lines
+    .map((line, index) => {
+      const match = line.match(/^((?:Speaker|Nguoi noi)\s*\d+)\s*:\s*(.+)$/i);
+      if (!match) return null;
+
+      const seconds = index * 12;
+      return {
+        id: String(index + 1),
+        time: formatSecondsToTimestamp(seconds),
+        seconds,
+        speaker: match[1].trim(),
+        text: match[2].trim(),
+      } as TranscriptLine;
+    })
+    .filter((line): line is TranscriptLine => line !== null);
+
+  if (speakerPrefixLines.length > 0) {
+    return speakerPrefixLines;
+  }
+
+  return [
+    {
+      id: '1',
+      time: '00:00',
+      seconds: 0,
+      speaker: 'Transcript',
+      text: transcript,
+    },
+  ];
+};
 
 export default function MeetingDetailPage() {
   const params = useParams();
@@ -40,11 +143,35 @@ export default function MeetingDetailPage() {
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const describeMediaError = () => {
+    const code = audioRef.current?.error?.code;
+    switch (code) {
+      case MediaError.MEDIA_ERR_ABORTED:
+        return 'Phát audio bị hủy giữa chừng.';
+      case MediaError.MEDIA_ERR_NETWORK:
+        return 'Lỗi mạng khi tải audio.';
+      case MediaError.MEDIA_ERR_DECODE:
+        return 'Không thể giải mã audio.';
+      case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+        return 'Nguồn audio không được hỗ trợ hoặc không tồn tại.';
+      default:
+        return 'Không thể tải audio. File có thể đang được xử lý hoặc không khả dụng.';
+    }
+  };
+
   const fetchDetail = async (options?: { silent?: boolean }) => {
     const silent = options?.silent;
     if (!silent) setIsLoading(true);
     try {
-      const response = await fetch(`/api/meetings/${id}`);
+      // Add cache-busting timestamp to prevent browser caching
+      const response = await fetch(`/api/meetings/${id}?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setMeeting(data);
@@ -62,6 +189,13 @@ export default function MeetingDetailPage() {
   useEffect(() => {
     if (id) fetchDetail();
   }, [id]);
+
+  useEffect(() => {
+    setAudioError(null);
+    setIsPlaying(false);
+  }, [meeting?.audio_url]);
+
+  const transcriptLines = useMemo(() => parseTranscriptLines(meeting), [meeting]);
 
   if (isLoading) {
      return (
@@ -178,10 +312,6 @@ export default function MeetingDetailPage() {
     setTasks(tasks.map(t => t.id === taskId ? { ...t, status: t.status === 'completed' ? 'pending' : 'completed' } : t));
   };
 
-  // Convert flat transcript string to expected format if needed, 
-  // or handle as block text. Current TranscriptView seems to expect an array.
-  const transcriptLines = meeting.transcript ? [{ id: '1', time: '00:00', speaker: 'AI', text: meeting.transcript }] : [];
-
   return (
     <div className="w-full max-w-[1600px] mx-auto p-4 lg:p-8 h-[calc(100vh-6rem)] flex flex-col xl:flex-row gap-6">
       
@@ -223,22 +353,31 @@ export default function MeetingDetailPage() {
             error={audioError}
         />
 
-          <audio
-            ref={audioRef}
-            src={`/api/meetings/${id}/stream`}
-            onTimeUpdate={syncProgress}
-            onLoadedMetadata={syncProgress}
-            onEnded={() => setIsPlaying(false)}
-            onError={(e) => {
-              console.error('Audio error:', e);
-              setAudioError('Không thể tải audio. File có thể đang được xử lý hoặc không khả dụng.');
-              setIsPlaying(false);
-            }}
-            className="hidden"
-          />
+          {meeting.audio_url && (
+            <audio
+              ref={audioRef}
+              src={`/api/meetings/${id}/stream`}
+              preload="none"
+              onTimeUpdate={syncProgress}
+              onLoadedMetadata={syncProgress}
+              onEnded={() => setIsPlaying(false)}
+              onError={() => {
+                const mediaErrorCode = audioRef.current?.error?.code;
+                console.error('Audio load failed', {
+                  meetingId: id,
+                  audioUrl: meeting.audio_url,
+                  currentSrc: audioRef.current?.currentSrc,
+                  mediaErrorCode,
+                });
+                setAudioError(describeMediaError());
+                setIsPlaying(false);
+              }}
+              className="hidden"
+            />
+          )}
 
         <TranscriptView 
-          transcript={transcriptLines as any}
+          transcript={transcriptLines}
           currentTimeSeconds={currentTime}
           onLineClick={handleTranscriptClick}
           onReload={handleReloadTranscript}

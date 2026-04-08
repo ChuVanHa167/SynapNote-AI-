@@ -80,7 +80,16 @@ def transcribe(
     url = "https://api.groq.com/openai/v1/audio/transcriptions"
     with open(wav_path, "rb") as f:
         files = {"file": (os.path.basename(wav_path), f, "audio/wav")}
-        data = {"model": "whisper-large-v3", "response_format": "text"}
+        data = {
+            "model": "whisper-large-v3",
+            "response_format": "text",
+            "language": "vi",
+            "temperature": 0,
+            "prompt": (
+                "Hay chep lai nguyen van noi dung nghe duoc bang tieng Viet. "
+                "Khong tom tat. Khong dien giai. Khong them noi dung."
+            ),
+        }
         headers = {"Authorization": f"Bearer {groq_api_key}"}
         resp = requests.post(url, headers=headers, files=files, data=data, timeout=120)
 

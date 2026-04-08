@@ -1,6 +1,11 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 import uvicorn
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from app.routers import auth, meetings, chat, integrations, billing
 
@@ -47,4 +52,4 @@ async def root():
     return {"message": "SynapNote AI API is running. Go to /docs for Swagger UI."}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)     
+    uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)
