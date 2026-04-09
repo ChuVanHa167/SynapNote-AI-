@@ -9,15 +9,15 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/meetings',
-        destination: 'http://127.0.0.1:8002/meetings/',
+        destination: 'http://127.0.0.1:8010/meetings/',
       },
       {
         source: '/api/:path*',
-        destination: 'http://127.0.0.1:8002/:path*',
+        destination: 'http://127.0.0.1:8010/:path*',
       },
       {
         source: '/uploads/:path*',
-        destination: 'http://127.0.0.1:8002/uploads/:path*',
+        destination: 'http://127.0.0.1:8010/uploads/:path*',
       },
     ];
   },

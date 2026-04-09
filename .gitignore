@@ -47,3 +47,5 @@ uploads/
 backend/venv/
 backend/__pycache__/
 backend/*.pyc
+__pycache__/
+*.pyc

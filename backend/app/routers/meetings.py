@@ -1,7 +1,9 @@
 import os
+import re
 import shutil
 import subprocess
 import io
+import unicodedata
 from typing import Iterator, List, Optional, Tuple
 from fastapi import APIRouter, File, UploadFile, BackgroundTasks, Depends, Form, Query, Response, Request, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
@@ -22,6 +24,22 @@ router = APIRouter(prefix="/meetings", tags=["meetings"])
 def get_meeting_service(db: Session = Depends(get_db)):
     repo = SqlMeetingRepository(db)
     return MeetingService(repo)
+
+
+def _normalize_upload_filename(filename: Optional[str]) -> str:
+    raw_name = os.path.basename(filename or "upload.bin")
+    stem, ext = os.path.splitext(raw_name)
+
+    normalized_stem = unicodedata.normalize("NFD", stem)
+    normalized_stem = "".join(ch for ch in normalized_stem if unicodedata.category(ch) != "Mn")
+    normalized_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", normalized_stem).strip("._")
+
+    normalized_ext = unicodedata.normalize("NFD", ext)
+    normalized_ext = "".join(ch for ch in normalized_ext if unicodedata.category(ch) != "Mn")
+    normalized_ext = re.sub(r"[^A-Za-z0-9.]", "", normalized_ext)
+
+    safe_stem = normalized_stem or "upload"
+    return f"{safe_stem}{normalized_ext}"
 
 @router.get("/", response_model=List[Meeting])
 async def list_meetings(response: Response, service: MeetingService = Depends(get_meeting_service)):
@@ -201,7 +219,11 @@ async def upload_audio(
     Upload file trực tiếp với progress tracking
     Trả về job_id để theo dõi tiến độ qua SSE endpoint
     """
-    print(f"[Upload] Received file: {file.filename}, size: {file.size}")
+    raw_filename = file.filename or "upload.bin"
+    safe_filename = _normalize_upload_filename(raw_filename)
+    print(f"[Upload] Received file: {raw_filename}, size: {file.size}")
+    if safe_filename != raw_filename:
+        print(f"[Upload] Normalized filename: {safe_filename}")
 
     # Create job for progress tracking
     job = job_tracker.create_job()
@@ -212,7 +234,7 @@ async def upload_audio(
     job_tracker.update_progress(job_id, 5, "Đang nhận file...", "processing")
 
     # 1. Start meeting in PENDING status
-    new_meeting = service.upload_audio_and_process(file.filename, title, duration)
+    new_meeting = service.upload_audio_and_process(safe_filename, title, duration)
     print(f"[Upload] Created meeting ID: {new_meeting.id}")
     MeetingService.clear_cancel(new_meeting.id)
 
@@ -220,7 +242,7 @@ async def upload_audio(
     os.makedirs("uploads", exist_ok=True)
 
     # 3. Check if file is video
-    is_video = file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm'))
+    is_video = safe_filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm'))
 
     # 4. Generate output filename (audio only)
     audio_filename = f"{new_meeting.id}.mp3"
@@ -232,7 +254,8 @@ async def upload_audio(
         
         if is_video:
             # Save to temp file first, then extract audio
-            temp_path = os.path.join("uploads", f"temp_{new_meeting.id}")
+            temp_ext = os.path.splitext(safe_filename)[1] or ".tmp"
+            temp_path = os.path.join("uploads", f"temp_{new_meeting.id}{temp_ext}")
             with open(temp_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 

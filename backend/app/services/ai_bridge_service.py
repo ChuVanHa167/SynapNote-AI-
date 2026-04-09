@@ -10,6 +10,12 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 from app.models.schemas import Meeting
+from app.services.prompt import (
+    get_gemini_diarization_prompt,
+    get_gemini_summary_prompt,
+    get_gemini_transcript_fix_prompt,
+    get_groq_transcription_prompt,
+)
 
 
 STT_PROFILES: Dict[str, Dict[str, Any]] = {
@@ -113,12 +119,36 @@ def _ensure_ffmpeg_on_path() -> bool:
 class AIBridgeService:
     """Bridge service that reuses scripts in ai/ for backend workflows."""
 
-    GROQ_MODEL = "whisper-large-v3"
+    GROQ_MODEL = "whisper-large-v3-turbo"
     GEMINI_MODEL = "gemini-flash-lite-latest"
-    DEFAULT_CHUNK_SECONDS = 90  # 1.5 minutes - optimal for Vietnamese transcription accuracy
+    DEFAULT_CHUNK_SECONDS = 120  # 2 minutes - optimal for Vietnamese transcription accuracy
     MAX_TRANSCRIPT_FIX_CHARS_PER_CALL = 2800
     MAX_TRANSCRIPT_SUMMARY_CHARS = 32000
     MAX_FIX_CHUNKS = 20
+    UNWANTED_STT_PATTERNS = (
+        re.compile(
+            r"Hãy\s+subscribe\s+cho\s+kênh\s+Ghiền\s+Mì\s+Gõ\s+để\s+không\s+bỏ\s+lỡ\s+những\s+video\s+hấp\s+dẫn\.?",
+            flags=re.IGNORECASE,
+        ),
+        re.compile(
+            r"Hay\s+subscribe\s+cho\s+kenh\s+Ghien\s+Mi\s+Go\s+de\s+khong\s+bo\s+lo\s+nhung\s+video\s+hap\s+dan\.?",
+            flags=re.IGNORECASE,
+        ),
+    )
+
+    def _sanitize_stt_output(self, text: str) -> str:
+        if not text:
+            return ""
+
+        cleaned = text
+        for pattern in self.UNWANTED_STT_PATTERNS:
+            cleaned = pattern.sub("", cleaned)
+
+        # Keep line structure stable while trimming artifacts left after removal.
+        cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+        cleaned = re.sub(r" *\n *", "\n", cleaned)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned.strip()
 
     def _is_truthy(self, value: Optional[str], default: bool = False) -> bool:
         if value is None:
@@ -167,7 +197,7 @@ class AIBridgeService:
 
             temp_wav_path = convert_audio(input_audio_path)
             raw_text = transcribe(temp_wav_path, profile_config=stt_config)
-            return clean_text(raw_text)
+            return self._sanitize_stt_output(clean_text(raw_text))
         except Exception as exc:
             print(f"[AIBridgeService] STT fallback due to error: {exc}")
             return "Khong the trich xuat transcript tu file audio nay o thoi diem hien tai."
@@ -386,11 +416,7 @@ class AIBridgeService:
         }
 
         # Add unique request ID as prompt to break any cache
-        data["prompt"] = (
-            f"Ma yeu cau duy nhat: {unique_id}. "
-            "Hay chep lai dung nguyen van noi dung nghe duoc bang tieng Viet. "
-            "Khong tom tat. Khong dien giai. Khong them noi dung moi."
-        )
+        data["prompt"] = get_groq_transcription_prompt(unique_id)
 
         headers = {
             "Authorization": f"Bearer {groq_api_key}",
@@ -400,7 +426,7 @@ class AIBridgeService:
         resp = requests.post(url, headers=headers, files=files, data=data, timeout=120)
         if resp.status_code != 200:
             raise RuntimeError(f"Groq STT failed: {resp.status_code} {resp.text}")
-        return resp.text.strip()
+        return self._sanitize_stt_output(resp.text.strip())
 
     def _get_groq_model(self) -> str:
         return os.getenv("GROQ_MODEL", self.GROQ_MODEL)
@@ -703,20 +729,7 @@ class AIBridgeService:
         if len(compact_chunks) < 2:
             return []
 
-        prompt = (
-            "Ban la mo hinh diarization toi uu cho Gemini Flash Lite.\n"
-            "Nhiem vu: tach luot noi trong transcript cuoc hop va tra ve DUY NHAT mot JSON object.\n"
-            "Bat buoc:\n"
-            "1) JSON co dung 1 truong: speaker_turns (mang).\n"
-            "2) Moi phan tu speaker_turns phai co: speaker, start, end, text.\n"
-            "3) speaker chi duoc dat ten theo mau: Speaker 1, Speaker 2, ...\n"
-            "4) text giu nguyen y nghia cau noi bang tieng Viet, khong tom tat, khong them thong tin.\n"
-            "5) start/end phai nam trong khoang chunk va end > start.\n"
-            "6) Neu khong chac thi gop it turn lon hon, KHONG doan bua.\n"
-            "7) Neu dau vao khong du thong tin, tra ve {\"speaker_turns\": []}.\n"
-            "8) Khong tra ve markdown, khong tra ve giai thich.\n\n"
-            f"Chunk data JSON:\n{json.dumps(compact_chunks, ensure_ascii=False)}"
-        )
+        prompt = get_gemini_diarization_prompt(compact_chunks)
 
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -775,20 +788,7 @@ class AIBridgeService:
                 {
                     "parts": [
                         {
-                            "text": (
-                                "Ban la tro ly tong hop cuoc hop toi uu cho Gemini Flash Lite.\n"
-                                "Muc tieu: doc transcript va tra ve DUY NHAT JSON voi 3 truong: summary, decisions, action_items.\n"
-                                "Rang buoc bat buoc:\n"
-                                "1) Toan bo noi dung output phai bang tieng Viet de hieu, khong chen cau tieng Anh.\n"
-                                "2) summary: <= 180 tu, ngan gon, neu duoc buc tranh tong quan cuoc hop.\n"
-                                "3) decisions: chi ghi quyet dinh da chot ro rang (da thong nhat/duoc phe duyet).\n"
-                                "   Khong dua de xuat dang ban, cau hoi mo, hoac suy doan. Neu khong co thi tra ve [].\n"
-                                "4) action_items: moi muc la object gom task, assignee, deadline, status.\n"
-                                "   Neu khong co thong tin assignee/deadline thi de chuoi rong.\n"
-                                "   status chi duoc mot trong: pending, in_progress, completed.\n"
-                                "5) Khong them truong moi. Khong markdown. Khong giai thich ngoai JSON.\n\n"
-                                f"Transcript:\n{transcript_for_summary}"
-                            )
+                            "text": get_gemini_summary_prompt(transcript_for_summary)
                         }
                     ]
                 }
@@ -796,7 +796,6 @@ class AIBridgeService:
             "generationConfig": {
                 "responseMimeType": "application/json",
                 "temperature": 0.0,
-                "topP": 0.9,
                 "maxOutputTokens": 2048,
             },
         }
@@ -866,27 +865,17 @@ class AIBridgeService:
             prev_context = chunks[index - 1][-500:] if index > 0 else ""
             next_context = chunks[index + 1][:500] if (index + 1) < len(chunks) else ""
 
-            prompt = (
-                "Ban la cong cu chuan hoa transcript toi uu cho Gemini Flash Lite. "
-                "Hay viet lai cau tu thanh tieng Viet tu nhien, ro rang, co dau cau, de doc. "
-                "GIU DUNG y nghia, KHONG tom tat, KHONG them y moi, KHONG bo sot y quan trong. "
-                "Bat buoc sua ca nhung cum tu/cau vo nghia, sai logic, hoac khong hop ngu canh do loi nhan dang am thanh. "
-                "Duoc phep suy luan muc do vua phai dua tren ngu canh truoc va sau de phuc hoi cau hop ly, "
-                "nhung KHONG duoc thay doi su kien, quyet dinh, so lieu hoac ten rieng quan trong. "
-                "Neu co cau khong phai tieng Viet, uu tien dien dat lai sang tieng Viet (giu nguyen ten rieng/thuat ngu ky thuat quan trong). "
-                "Neu van ban co nhan Speaker hoac moc thoi gian, phai GIU NGUYEN dinh dang nhan. "
-                "Chi tra ve PHIEN BAN DA SUA cua DOAN CAN SUA, khong lap lai ngu canh truoc/sau, khong giai thich.\n\n"
-                f"NGU CANH TRUOC (tham khao):\n{prev_context or '[khong co]'}\n\n"
-                f"DOAN CAN SUA:\n{chunk}\n\n"
-                f"NGU CANH SAU (tham khao):\n{next_context or '[khong co]'}"
+            prompt = get_gemini_transcript_fix_prompt(
+                chunk=chunk,
+                prev_context=prev_context,
+                next_context=next_context,
             )
 
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
                     "responseMimeType": "text/plain",
-                    "temperature": 0.15,
-                    "topP": 0.9,
+                    "temperature": 0.0,
                     "maxOutputTokens": 2048,
                 }
             }
