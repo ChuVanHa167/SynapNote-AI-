@@ -140,13 +140,13 @@ export default function MeetingsPage() {
                         <th className="px-8 py-5 font-medium">Tên cuộc họp</th>
                         <th className="px-8 py-5 font-medium">Thời gian</th>
                         <th className="px-8 py-5 font-medium">Thời lượng</th>
-                        <th className="px-8 py-5 font-medium text-center">Người tham gia</th>
+                        <th className="px-8 py-5 font-medium text-center">Số thứ tự cuộc họp</th>
                         <th className="px-8 py-5 font-medium text-right">Trạng thái</th>
                         <th className="px-8 py-5 text-right"></th>
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                     {filteredMeetings.map((item) => (
+                     {filteredMeetings.map((item, index) => (
                         <tr key={item.id} className="hover:bg-card/40 transition-colors group">
                            <td className="px-8 py-5">
                               <Link href={`/meetings/${item.id}`} className="flex items-center gap-4">
@@ -165,7 +165,7 @@ export default function MeetingsPage() {
                               </div>
                            </td>
                            <td className="px-8 py-5 text-foreground/90 font-mono text-xs">{item.duration}</td>
-                           <td className="px-8 py-5 text-center text-foreground/90">{item.participants}</td>
+                           <td className="px-8 py-5 text-center text-foreground/90">{index + 1}</td>
                            <td className="px-8 py-5 text-right">
                               <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wider border ${getStatusStyle(item.status)}`}>
                                  {item.status}

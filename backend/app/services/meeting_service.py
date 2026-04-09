@@ -189,6 +189,54 @@ class MeetingService:
             })
             self.clear_cancel(meeting_id)
 
+    def regenerate_summary_sections(self, meeting_id: str) -> Optional[Meeting]:
+        meeting = self.meeting_repo.get_by_id(meeting_id)
+        if not meeting:
+            return None
+
+        transcript_text = (meeting.transcript or "").strip()
+        if not transcript_text:
+            raise ValueError("Chưa có bản dịch để tạo lại tóm tắt")
+
+        summary_payload = self.ai_bridge_service.summarize_transcript(transcript_text)
+
+        decisions = [str(x).strip() for x in (summary_payload.get("key_points") or []) if str(x).strip()]
+        action_items = summary_payload.get("action_items") or []
+
+        normalized_action_items = []
+        for item in action_items:
+            if isinstance(item, str):
+                normalized_action_items.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "task": item.strip(),
+                        "assignee": "",
+                        "deadline": "",
+                        "status": "pending",
+                    }
+                )
+            elif isinstance(item, dict):
+                task_text = str(item.get("task") or "").strip()
+                if not task_text:
+                    continue
+                normalized_action_items.append(
+                    {
+                        "id": str(item.get("id") or uuid.uuid4()),
+                        "task": task_text,
+                        "assignee": str(item.get("assignee") or ""),
+                        "deadline": str(item.get("deadline") or ""),
+                        "status": str(item.get("status") or "pending"),
+                    }
+                )
+
+        updates = {
+            "summary": summary_payload.get("summary") or "Chua the tao tom tat tu dong.",
+            "decisions": decisions,
+            "action_items": normalized_action_items,
+        }
+
+        return self.meeting_repo.update(meeting_id, updates)
+
     def delete_meeting(self, meeting_id: str) -> bool:
         meeting = self.meeting_repo.get_by_id(meeting_id)
         if not meeting:

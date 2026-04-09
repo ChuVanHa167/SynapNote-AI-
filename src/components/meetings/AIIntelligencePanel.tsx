@@ -14,11 +14,21 @@ interface AIIntelligencePanelProps {
   actionItems: ActionItem[];
   onToggleTask: (id: string) => void;
   meetingId?: string;
+   onReloadSummary?: () => void;
+   isReloadingSummary?: boolean;
 }
 
 const API_BASE_URL = '/api';
 
-export function AIIntelligencePanel({ summary, decisions, actionItems, onToggleTask, meetingId }: AIIntelligencePanelProps) {
+export function AIIntelligencePanel({
+   summary,
+   decisions,
+   actionItems,
+   onToggleTask,
+   meetingId,
+   onReloadSummary,
+   isReloadingSummary = false,
+}: AIIntelligencePanelProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'chat'>('summary');
   const [chatMessages, setChatMessages] = useState<Message[]>([
     { role: 'assistant', content: 'Hãy hỏi bất kỳ điều gì về cuộc họp này.' }
@@ -124,9 +134,20 @@ export function AIIntelligencePanel({ summary, decisions, actionItems, onToggleT
             <div className="space-y-10">
                {/* Executive Summary */}
                <section>
-                  <h4 className="text-xs font-semibold tracking-widest uppercase text-foreground/80 mb-4 flex items-center gap-2">
-                     <LayoutList size={14} className="text-accent" /> Tóm tắt điều hành
-                  </h4>
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                     <h4 className="text-xs font-semibold tracking-widest uppercase text-foreground/80 flex items-center gap-2">
+                        <LayoutList size={14} className="text-accent" /> Tóm tắt điều hành
+                     </h4>
+                     <button
+                        type="button"
+                        onClick={onReloadSummary}
+                        disabled={!onReloadSummary || isReloadingSummary}
+                        className="text-foreground/80 hover:text-accent transition-colors flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border border-border disabled:opacity-50 disabled:hover:text-foreground/80"
+                     >
+                        <RefreshCw size={14} className={isReloadingSummary ? 'animate-spin' : ''} />
+                        {isReloadingSummary ? 'Đang tải...' : 'Tải lại'}
+                     </button>
+                  </div>
                   <p className="text-sm text-foreground/90 leading-relaxed font-medium">
                      {summary}
                   </p>

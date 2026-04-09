@@ -139,6 +139,7 @@ export default function MeetingDetailPage() {
   const [volume, setVolume] = useState(0.66);
   const [tasks, setTasks] = useState<any[]>([]);
   const [isReloadingTranscript, setIsReloadingTranscript] = useState(false);
+  const [isReloadingSummary, setIsReloadingSummary] = useState(false);
   const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -308,6 +309,32 @@ export default function MeetingDetailPage() {
     }
   };
 
+  const handleReloadSummary = async () => {
+    if (isReloadingSummary) return;
+
+    setIsReloadingSummary(true);
+    try {
+      const response = await fetch(`/api/meetings/${id}/refresh-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to refresh summary sections:', errorText);
+        return;
+      }
+
+      const updatedMeeting = await response.json();
+      setMeeting(updatedMeeting);
+      setTasks(updatedMeeting.action_items || []);
+    } catch (error) {
+      console.error('Error refreshing summary sections:', error);
+    } finally {
+      setIsReloadingSummary(false);
+    }
+  };
+
   const toggleTask = (taskId: string) => {
     setTasks(tasks.map(t => t.id === taskId ? { ...t, status: t.status === 'completed' ? 'pending' : 'completed' } : t));
   };
@@ -395,6 +422,8 @@ export default function MeetingDetailPage() {
             actionItems={tasks}
             onToggleTask={toggleTask}
             meetingId={id}
+          onReloadSummary={handleReloadSummary}
+          isReloadingSummary={isReloadingSummary}
          />
       </div>
 

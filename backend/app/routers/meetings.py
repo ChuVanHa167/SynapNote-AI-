@@ -451,6 +451,32 @@ async def reprocess_meeting(
     return service.get_meeting(meeting_id)
 
 
+@router.post("/{meeting_id}/refresh-summary", response_model=Meeting)
+async def refresh_summary_sections(
+    meeting_id: str,
+    service: MeetingService = Depends(get_meeting_service),
+):
+    meeting = service.get_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    transcript_text = (meeting.transcript or "").strip()
+    if not transcript_text:
+        raise HTTPException(status_code=400, detail="Chưa có bản dịch để tạo lại tóm tắt")
+
+    try:
+        updated = service.regenerate_summary_sections(meeting_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Không thể tải lại tóm tắt: {str(exc)}") from exc
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    return updated
+
+
 @router.post("/{meeting_id}/stop", response_model=Meeting)
 async def stop_processing(
     meeting_id: str,
